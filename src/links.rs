@@ -1,10 +1,11 @@
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::HashMap;
 use std::fs::File;
-// use std::fs::OpenOptions;
-use std::path::Path;
+use std::io::{self, BufRead};
+use std::path::{Path, PathBuf};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct Link {
     url: String,
     description: String,
@@ -25,13 +26,29 @@ impl Link {
     }
 }
 
+fn read_links_to_map(filename: PathBuf) -> HashMap<String, Link> {
+    let file = File::open(filename).unwrap();
+    let lines = io::BufReader::new(file).lines();
+
+    lines
+        .map(|line| {
+            let data = line.unwrap();
+            let obj: Link = serde_json::from_str(&data).unwrap();
+            (obj.url.clone(), obj)
+        })
+        .collect()
+}
+
 pub fn handle_link(data: String, add: Option<String>) {
     let links_file = Path::new(&data).join("links.jsonl");
-    if !links_file.exists() {
-        File::create(links_file).unwrap_or_else(|error| {
+    if !links_file.clone().exists() {
+        File::create(links_file.clone()).unwrap_or_else(|error| {
             panic!("Problem creating the file: {:?}", error);
         });
     }
+
+    // read json file and group into a map by url
+    let links = read_links_to_map(links_file);
 
     if add.is_some() {
         let url = add.unwrap();
@@ -40,8 +57,6 @@ pub fn handle_link(data: String, add: Option<String>) {
             String::from("this is a description"),
             String::from("1, 2, 3, 4"),
         );
-
-        // read json file and group into a map by url
 
         // check if the url exist
         // -> show a meesage and exit if exists
@@ -60,7 +75,9 @@ pub fn handle_link(data: String, add: Option<String>) {
         //     eprintln!("Couldn't write to file: {}", e);
         // }
     } else {
-        println!("Show list")
+        for (link, obj) in links {
+            println!("{:?} - {:?}", link, obj.clone())
+        }
     }
 
     // let paths = fs::read_dir(default_path.as_ref()).unwrap();
