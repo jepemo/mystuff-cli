@@ -1,3 +1,4 @@
+use inquire::{CustomUserError, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::HashMap;
@@ -43,6 +44,37 @@ fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
     std::fs::write(filename, links.join("\n")).expect("failed to write to file");
 }
 
+// fn suggester(val: &str) -> Result<Vec<String>, CustomUserError> {
+//     let suggestions = [
+//         "s1",
+//         "s2",
+//         "s3",
+//         "s4",
+//         "s5",
+//     ];
+
+//     let val_lower = val.to_lowercase();
+
+//     Ok(suggestions
+//         .iter()
+//         .filter(|s| s.to_lowercase().contains(&val_lower))
+//         .map(|s| String::from(*s))
+//         .collect())
+// }
+
+fn read_link_data_from_prompt(url: &String, _current_tags: &Vec<String>) -> Link {
+    let link = Link::new(
+        &url,
+        Text::new("Description").prompt().unwrap(),
+        Text::new("Tags (t1,t2,t3):")
+            // .with_autocomplete(&suggester)
+            .prompt()
+            .unwrap(),
+    );
+
+    link
+}
+
 pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
     let links_file = Path::new(&data).join("links.jsonl");
     if !links_file.clone().exists() {
@@ -51,16 +83,11 @@ pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
         });
     }
 
-    // read json file and group into a map by url
     let mut links = read_links_to_map(&links_file);
 
     if add.is_some() {
         let url = add.unwrap();
-        let link = Link::new(
-            &url,
-            String::from("this is a description"),
-            String::from("1, 2, 3, 4"),
-        );
+        let link = read_link_data_from_prompt(&url, &Vec::new());
 
         if !links.contains_key(&url) {
             let json_link = json!(link.clone());
