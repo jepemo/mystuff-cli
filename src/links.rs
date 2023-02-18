@@ -1,7 +1,7 @@
 use inquire::{CustomUserError, Text};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
@@ -62,7 +62,8 @@ fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
 //         .collect())
 // }
 
-fn read_link_data_from_prompt(url: &String, _current_tags: &Vec<String>) -> Link {
+fn read_link_data_from_prompt(url: &String, current_tags: &Vec<String>) -> Link {
+    println!("{current_tags:?}");
     let link = Link::new(
         &url,
         Text::new("Description").prompt().unwrap(),
@@ -73,6 +74,17 @@ fn read_link_data_from_prompt(url: &String, _current_tags: &Vec<String>) -> Link
     );
 
     link
+}
+
+fn get_tags_from_links(links: &HashMap<String, Link>) -> Vec<String> {
+    let tags: HashSet<_> = links
+        .values()
+        .into_iter()
+        .flat_map(|link| link.tags.clone())
+        .map(|tag| String::from(tag.to_lowercase().trim()))
+        .collect();
+
+    tags.into_iter().collect::<Vec<String>>()
 }
 
 pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
@@ -87,7 +99,8 @@ pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
 
     if add.is_some() {
         let url = add.unwrap();
-        let link = read_link_data_from_prompt(&url, &Vec::new());
+        let tags = get_tags_from_links(&links);
+        let link = read_link_data_from_prompt(&url, &tags);
 
         if !links.contains_key(&url) {
             let json_link = json!(link.clone());
