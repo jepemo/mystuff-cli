@@ -29,7 +29,7 @@ fn main() {
             }
         }
         Some(command) => match command {
-            Commands::Link { add } => handle_link(data, add),
+            Commands::Link { add } => handle_link(data, add, args.verbose),
         },
     }
 }

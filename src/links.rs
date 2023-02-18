@@ -13,20 +13,20 @@ struct Link {
 }
 
 impl Link {
-    fn new(url: String, description: String, tags: String) -> Link {
+    fn new(url: &String, description: String, tags: String) -> Link {
         let cleaned_tags = tags
             .split(",")
             .map(|tag| String::from(tag.trim()))
             .collect();
         Link {
-            url,
+            url: url.clone(),
             description,
             tags: cleaned_tags,
         }
     }
 }
 
-fn read_links_to_map(filename: PathBuf) -> HashMap<String, Link> {
+fn read_links_to_map(filename: &PathBuf) -> HashMap<String, Link> {
     let file = File::open(filename).unwrap();
     let lines = io::BufReader::new(file).lines();
 
@@ -39,7 +39,11 @@ fn read_links_to_map(filename: PathBuf) -> HashMap<String, Link> {
         .collect()
 }
 
-pub fn handle_link(data: String, add: Option<String>) {
+fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
+    std::fs::write(filename, links.join("\n")).expect("failed to write to file");
+}
+
+pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
     let links_file = Path::new(&data).join("links.jsonl");
     if !links_file.clone().exists() {
         File::create(links_file.clone()).unwrap_or_else(|error| {
@@ -48,40 +52,37 @@ pub fn handle_link(data: String, add: Option<String>) {
     }
 
     // read json file and group into a map by url
-    let links = read_links_to_map(links_file);
+    let mut links = read_links_to_map(&links_file);
 
     if add.is_some() {
         let url = add.unwrap();
         let link = Link::new(
-            url,
+            &url,
             String::from("this is a description"),
             String::from("1, 2, 3, 4"),
         );
 
-        // check if the url exist
-        // -> show a meesage and exit if exists
+        if !links.contains_key(&url) {
+            let json_link = json!(link.clone());
 
-        // add the new link in the map
+            if verbose {
+                println!("==> Added link {json_link:#}");
+            }
 
-        // append the link in the file
-        // or?
-        // write again the map in the file
-        let json_link = json!(link);
-        println!("Add link {:?}", json_link);
+            links.insert(link.url.clone(), link.clone());
 
-        // let mut file = OpenOptions::new().append(true).open(links_file).unwrap();
+            let updated_links: Vec<String> = links
+                .values()
+                .map(|obj| serde_json::to_string(obj).unwrap())
+                .collect();
 
-        // if let Err(e) = writeln!(file, "{}", json_link) {
-        //     eprintln!("Couldn't write to file: {}", e);
-        // }
+            write_links_to_file(updated_links, &links_file);
+        } else {
+            println!("Link {url} already exists");
+        }
     } else {
         for (link, obj) in links {
             println!("{:?} - {:?}", link, obj.clone())
         }
     }
-
-    // let paths = fs::read_dir(default_path.as_ref()).unwrap();
-    // for path in paths {
-    //     println!("Name: {}", path.unwrap().path().display())
-    // }
 }
