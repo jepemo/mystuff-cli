@@ -50,16 +50,28 @@ fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
 #[derive(Clone, Default)]
 struct TagCompleter {
     tags: Vec<String>,
+    input: String,
 }
 
 impl Autocomplete for TagCompleter {
     fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, CustomUserError> {
-        let val_lower = input.to_lowercase();
+        let val_lower = input.trim().to_lowercase();
+        if "".eq(&val_lower) {
+            return Ok(Vec::new());
+        }
+
+        let current_tag = val_lower
+            .split(", ")
+            .map(|word| word.trim())
+            .last()
+            .unwrap();
+
+        self.input = String::from(input);
 
         Ok(self
             .tags
             .iter()
-            .filter(|s| s.to_lowercase().contains(&val_lower))
+            .filter(|s| s.to_lowercase().contains(&current_tag))
             .map(|s| String::from(s.clone()))
             .collect())
     }
@@ -69,7 +81,17 @@ impl Autocomplete for TagCompleter {
         _: &str,
         suggestion: Option<String>,
     ) -> Result<Replacement, CustomUserError> {
-        Ok(suggestion)
+        let new_input = match self.input.rfind(",") {
+            None => String::from(""),
+            Some(idx) => format!("{}, ", &self.input.clone()[0..idx]),
+        };
+
+        match suggestion {
+            None => Ok(Some(new_input)),
+            Some(sug) => {
+                return Ok(Some(format!("{}{}", new_input, sug)));
+            }
+        }
     }
 }
 
@@ -78,7 +100,10 @@ fn read_link_data_from_prompt(url: &String, tags: &Vec<String>) -> Link {
         &url,
         Text::new("Description").prompt().unwrap(),
         Text::new("Tags (t1,t2,t3):")
-            .with_autocomplete(TagCompleter { tags: tags.clone() })
+            .with_autocomplete(TagCompleter {
+                input: String::from(""),
+                tags: tags.clone(),
+            })
             .prompt()
             .unwrap(),
     );
@@ -110,9 +135,9 @@ pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
     if add.is_some() {
         let url = add.unwrap();
         let tags = get_tags_from_links(&links);
-        let link = read_link_data_from_prompt(&url, &tags);
 
         if !links.contains_key(&url) {
+            let link = read_link_data_from_prompt(&url, &tags);
             let json_link = json!(link.clone());
 
             if verbose {
