@@ -1,4 +1,7 @@
-use inquire::{CustomUserError, Text};
+use inquire::{
+    autocompletion::{Autocomplete, Replacement},
+    CustomUserError, Text,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
@@ -44,31 +47,38 @@ fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
     std::fs::write(filename, links.join("\n")).expect("failed to write to file");
 }
 
-// fn suggester(val: &str) -> Result<Vec<String>, CustomUserError> {
-//     let suggestions = [
-//         "s1",
-//         "s2",
-//         "s3",
-//         "s4",
-//         "s5",
-//     ];
+#[derive(Clone, Default)]
+struct TagCompleter {
+    tags: Vec<String>,
+}
 
-//     let val_lower = val.to_lowercase();
+impl Autocomplete for TagCompleter {
+    fn get_suggestions(&mut self, input: &str) -> Result<Vec<String>, CustomUserError> {
+        let val_lower = input.to_lowercase();
 
-//     Ok(suggestions
-//         .iter()
-//         .filter(|s| s.to_lowercase().contains(&val_lower))
-//         .map(|s| String::from(*s))
-//         .collect())
-// }
+        Ok(self
+            .tags
+            .iter()
+            .filter(|s| s.to_lowercase().contains(&val_lower))
+            .map(|s| String::from(s.clone()))
+            .collect())
+    }
 
-fn read_link_data_from_prompt(url: &String, current_tags: &Vec<String>) -> Link {
-    println!("{current_tags:?}");
+    fn get_completion(
+        &mut self,
+        _: &str,
+        suggestion: Option<String>,
+    ) -> Result<Replacement, CustomUserError> {
+        Ok(suggestion)
+    }
+}
+
+fn read_link_data_from_prompt(url: &String, tags: &Vec<String>) -> Link {
     let link = Link::new(
         &url,
         Text::new("Description").prompt().unwrap(),
         Text::new("Tags (t1,t2,t3):")
-            // .with_autocomplete(&suggester)
+            .with_autocomplete(TagCompleter { tags: tags.clone() })
             .prompt()
             .unwrap(),
     );
