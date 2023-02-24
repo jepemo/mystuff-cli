@@ -4,6 +4,8 @@ mod links;
 use args::{Cli, Commands};
 use clap::Parser;
 use links::handle_link;
+use std::fs;
+use std::path::Path;
 
 fn main() {
     let args = Cli::parse();
@@ -16,7 +18,20 @@ fn main() {
     let data = args
         .data
         .clone()
-        .unwrap_or_else(|| String::from(default_path));
+        .unwrap_or_else(|| String::from(default_path.clone()));
+
+    if !Path::new(&data).is_dir() {
+        match fs::create_dir(&data) {
+            Ok(_file) => {
+                if args.verbose {
+                    println!("==> creating directory {}", &data)
+                }
+            }
+            Err(error) => {
+                panic!("cannot create directory; {}, error: {:?}", &data, error);
+            }
+        }
+    }
 
     if args.verbose {
         println!("==> data directory: {:?}", data);
