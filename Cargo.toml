@@ -1,10 +1,11 @@
 [package]
 name = "mystuff"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 description = "MyStuff: links, wiki, log journal, etc."
 license = "MIT"
-keywords = ["utility", "personal", "productivity"]
+keywords = ["utility", "personal", "productivity", "links", "wiki"]
+repository = "https://github.com/jepemo/mystuff-cli"
 
 [dependencies]
 clap = { version = "4.1.4", features = ["derive"] }
