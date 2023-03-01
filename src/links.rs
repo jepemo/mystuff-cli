@@ -2,19 +2,13 @@ use inquire::{
     autocompletion::{Autocomplete, Replacement},
     CustomUserError, Text,
 };
-use serde::{Deserialize, Serialize};
+
+use crate::types::Link;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
-
-#[derive(Clone, Debug, Deserialize, Serialize)]
-struct Link {
-    url: String,
-    description: String,
-    tags: Vec<String>,
-}
 
 impl Link {
     fn new(url: &String, description: String, tags: String) -> Link {

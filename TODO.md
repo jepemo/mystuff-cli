@@ -6,6 +6,7 @@
 - [ ] refactor (extract get_prompt part) to allow testing
 - [ ] refactor (extract storage part) to allow testing
 - [ ] allow reading all link fields from command line
+- [ ] include fzf selection
 
 ## 0.2 - Log
 - [ ] basic implementation
