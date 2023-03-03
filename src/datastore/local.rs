@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs;
 use std::fs::File;
 use std::io::{self, BufRead};
 use std::path::{Path, PathBuf};
@@ -6,8 +7,32 @@ use std::path::{Path, PathBuf};
 use super::DataStore;
 use crate::types::Link;
 
-struct LocalDataStore {
-    path: PathBuf,
+pub struct LocalDataStore {
+    pub path: PathBuf,
+}
+
+impl LocalDataStore {
+    pub fn new(arg_data: Option<String>) -> Self {
+        let default_path = shellexpand::tilde("~/.mystuff");
+        let data = arg_data
+            .clone()
+            .unwrap_or_else(|| String::from(default_path.clone()));
+
+        if !Path::new(&data).is_dir() {
+            match fs::create_dir(&data) {
+                Ok(_file) => {
+                    log::info!("==> creating directory {}", &data)
+                }
+                Err(error) => {
+                    panic!("cannot create directory; {}, error: {:?}", &data, error);
+                }
+            }
+        }
+
+        LocalDataStore {
+            path: PathBuf::from(data),
+        }
+    }
 }
 
 impl DataStore for LocalDataStore {

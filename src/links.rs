@@ -3,12 +3,13 @@ use inquire::{
     CustomUserError, Text,
 };
 
+use crate::datastore::DataStore;
 use crate::types::Link;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufRead};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 impl Link {
     fn new(url: &String, description: String, tags: String) -> Link {
@@ -116,42 +117,63 @@ fn get_tags_from_links(links: &HashMap<String, Link>) -> Vec<String> {
     tags.into_iter().collect::<Vec<String>>()
 }
 
-pub fn handle_link(data: String, add: Option<String>, verbose: bool) {
-    let links_file = Path::new(&data).join("links.jsonl");
-    if !links_file.clone().exists() {
-        File::create(links_file.clone()).unwrap_or_else(|error| {
-            panic!("Problem creating the file: {:?}", error);
-        });
-    }
+pub fn add_link<T: DataStore>(datastore: T, url: String) {
+    let mut links = datastore.get_links();
+    let tags = get_tags_from_links(&links);
 
-    let mut links = read_links_to_map(&links_file);
+    if !links.contains_key(&url) {
+        let link = read_link_data_from_prompt(&url, &tags);
+        // let json_link = json!(link.clone());
 
-    if add.is_some() {
-        let url = add.unwrap();
-        let tags = get_tags_from_links(&links);
+        // if verbose {
+        //     println!("==> Added link {json_link:#}");
+        // }
 
-        if !links.contains_key(&url) {
-            let link = read_link_data_from_prompt(&url, &tags);
-            let json_link = json!(link.clone());
+        links.insert(link.url.clone(), link.clone());
 
-            if verbose {
-                println!("==> Added link {json_link:#}");
-            }
-
-            links.insert(link.url.clone(), link.clone());
-
-            let updated_links: Vec<String> = links
-                .values()
-                .map(|obj| serde_json::to_string(obj).unwrap())
-                .collect();
-
-            write_links_to_file(updated_links, &links_file);
-        } else {
-            println!("Link {url} already exists");
-        }
+        datastore.set_links(&links);
     } else {
-        for (link, obj) in links {
-            println!("{:?} - {:?}", link, obj.clone())
-        }
+        println!("Link {url} already exists");
     }
 }
+
+pub fn list_links<T: DataStore>(datastore: T) {
+    let links = datastore.get_links();
+    for (link, obj) in links {
+        println!("{:?} - {:?}", link, obj.clone())
+    }
+}
+
+// pub fn handle_link(datastore: dyn DataStore, add: Option<String>, verbose: bool) {
+//     // let mut links = read_links_to_map(&links_file);
+//     let mut links = datastore.get_links();
+
+//     if add.is_some() {
+//         let url = add.unwrap();
+//         let tags = get_tags_from_links(&links);
+
+//         if !links.contains_key(&url) {
+//             let link = read_link_data_from_prompt(&url, &tags);
+//             let json_link = json!(link.clone());
+
+//             if verbose {
+//                 println!("==> Added link {json_link:#}");
+//             }
+
+//             links.insert(link.url.clone(), link.clone());
+
+//             let updated_links: Vec<String> = links
+//                 .values()
+//                 .map(|obj| serde_json::to_string(obj).unwrap())
+//                 .collect();
+
+//             write_links_to_file(updated_links, &links_file);
+//         } else {
+//             println!("Link {url} already exists");
+//         }
+//     } else {
+//         for (link, obj) in links {
+//             println!("{:?} - {:?}", link, obj.clone())
+//         }
+//     }
+// }
