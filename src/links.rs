@@ -22,23 +22,6 @@ impl Link {
     }
 }
 
-// fn read_links_to_map(filename: &PathBuf) -> HashMap<String, Link> {
-//     let file = File::open(filename).unwrap();
-//     let lines = io::BufReader::new(file).lines();
-
-//     lines
-//         .map(|line| {
-//             let data = line.unwrap();
-//             let obj: Link = serde_json::from_str(&data).unwrap();
-//             (obj.url.clone(), obj)
-//         })
-//         .collect()
-// }
-
-// fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
-//     std::fs::write(filename, links.join("\n")).expect("failed to write to file");
-// }
-
 #[derive(Clone, Default)]
 struct TagCompleter {
     tags: Vec<String>,
@@ -137,37 +120,3 @@ pub fn list_links<T: DataStore>(datastore: T) {
         println!("{:?} - {:?}", link, obj.clone())
     }
 }
-
-// pub fn handle_link(datastore: dyn DataStore, add: Option<String>, verbose: bool) {
-//     // let mut links = read_links_to_map(&links_file);
-//     let mut links = datastore.get_links();
-
-//     if add.is_some() {
-//         let url = add.unwrap();
-//         let tags = get_tags_from_links(&links);
-
-//         if !links.contains_key(&url) {
-//             let link = read_link_data_from_prompt(&url, &tags);
-//             let json_link = json!(link.clone());
-
-//             if verbose {
-//                 println!("==> Added link {json_link:#}");
-//             }
-
-//             links.insert(link.url.clone(), link.clone());
-
-//             let updated_links: Vec<String> = links
-//                 .values()
-//                 .map(|obj| serde_json::to_string(obj).unwrap())
-//                 .collect();
-
-//             write_links_to_file(updated_links, &links_file);
-//         } else {
-//             println!("Link {url} already exists");
-//         }
-//     } else {
-//         for (link, obj) in links {
-//             println!("{:?} - {:?}", link, obj.clone())
-//         }
-//     }
-// }
