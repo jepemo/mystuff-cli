@@ -29,6 +29,12 @@ impl LocalDataStore {
             }
         }
 
+        // Check links
+        let links_filepath = Path::new(&data).join("links.jsonl");
+        if !links_filepath.exists() {
+            File::create(links_filepath).unwrap();
+        }
+
         LocalDataStore {
             path: PathBuf::from(data),
         }

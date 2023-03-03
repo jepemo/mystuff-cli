@@ -7,9 +7,6 @@ use crate::datastore::DataStore;
 use crate::types::Link;
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
-use std::fs::File;
-use std::io::{self, BufRead};
-use std::path::PathBuf;
 
 impl Link {
     fn new(url: &String, description: String, tags: String) -> Link {
@@ -25,22 +22,22 @@ impl Link {
     }
 }
 
-fn read_links_to_map(filename: &PathBuf) -> HashMap<String, Link> {
-    let file = File::open(filename).unwrap();
-    let lines = io::BufReader::new(file).lines();
+// fn read_links_to_map(filename: &PathBuf) -> HashMap<String, Link> {
+//     let file = File::open(filename).unwrap();
+//     let lines = io::BufReader::new(file).lines();
 
-    lines
-        .map(|line| {
-            let data = line.unwrap();
-            let obj: Link = serde_json::from_str(&data).unwrap();
-            (obj.url.clone(), obj)
-        })
-        .collect()
-}
+//     lines
+//         .map(|line| {
+//             let data = line.unwrap();
+//             let obj: Link = serde_json::from_str(&data).unwrap();
+//             (obj.url.clone(), obj)
+//         })
+//         .collect()
+// }
 
-fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
-    std::fs::write(filename, links.join("\n")).expect("failed to write to file");
-}
+// fn write_links_to_file(links: Vec<String>, filename: &PathBuf) {
+//     std::fs::write(filename, links.join("\n")).expect("failed to write to file");
+// }
 
 #[derive(Clone, Default)]
 struct TagCompleter {
@@ -123,11 +120,8 @@ pub fn add_link<T: DataStore>(datastore: T, url: String) {
 
     if !links.contains_key(&url) {
         let link = read_link_data_from_prompt(&url, &tags);
-        // let json_link = json!(link.clone());
 
-        // if verbose {
-        //     println!("==> Added link {json_link:#}");
-        // }
+        log::info!("==> Added link {:#}", json!(link.clone()));
 
         links.insert(link.url.clone(), link.clone());
 

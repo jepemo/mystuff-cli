@@ -44,12 +44,6 @@ fn main() {
         .filter_level(args.verbose.log_level_filter())
         .init();
 
-    log::error!("Engines exploded");
-    log::warn!("Engines smoking");
-    log::info!("Engines exist");
-    log::debug!("Engine temperature is 200 degrees");
-    log::trace!("Engine subsection is 300 degrees");
-
     log::debug!("==> cli arguments: {:?}", args);
 
     let datastore = LocalDataStore::new(args.data);
