@@ -97,7 +97,12 @@ fn get_tags_from_links(links: &HashMap<String, Link>) -> Vec<String> {
     tags.into_iter().collect::<Vec<String>>()
 }
 
-pub fn add_link<T: DataStore>(datastore: T, url: String) {
+pub fn add_link<T: DataStore>(
+    datastore: T,
+    url: String,
+    tags: Vec<String>,
+    description: Option<String>,
+) {
     let mut links = datastore.get_links();
     let tags = get_tags_from_links(&links);
 

@@ -26,12 +26,23 @@ pub enum Commands {
         /// Add new link
         #[arg(short, long)]
         add: Option<String>,
+        /// Tags
+        #[arg(long)]
+        tag: Vec<String>,
+        /// Description
+        #[arg(long)]
+        description: Option<String>,
     },
 }
 
-fn handle_link<T: DataStore>(datastore: T, add: Option<String>) {
-    if add.is_some() {
-        add_link(datastore, add.unwrap())
+fn handle_link<T: DataStore>(
+    datastore: T,
+    url: Option<String>,
+    tags: Vec<String>,
+    description: Option<String>,
+) {
+    if url.is_some() {
+        add_link(datastore, url.unwrap(), tags, description)
     } else {
         list_links(datastore);
     }
@@ -55,7 +66,11 @@ fn main() {
             log::info!("==> no command");
         }
         Some(command) => match command {
-            Commands::Link { add } => handle_link(datastore, add),
+            Commands::Link {
+                add,
+                tag,
+                description,
+            } => handle_link(datastore, add, tag, description),
         },
     }
 }
