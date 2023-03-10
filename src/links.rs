@@ -98,7 +98,7 @@ fn get_tags_from_links(links: &HashMap<String, Link>) -> Vec<String> {
 }
 
 pub fn add_link<T: DataStore>(
-    datastore: T,
+    mut datastore: T,
     url: String,
     tags: Vec<String>,
     description: Option<String>,

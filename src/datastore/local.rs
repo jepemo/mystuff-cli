@@ -56,7 +56,7 @@ impl DataStore for LocalDataStore {
             .collect()
     }
 
-    fn set_links(&self, links: &HashMap<String, Link>) {
+    fn set_links(&mut self, links: &HashMap<String, Link>) {
         let filename = Path::new(&self.path).join("links.jsonl");
 
         let updated_links: Vec<String> = links
