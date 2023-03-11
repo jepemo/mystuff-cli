@@ -42,7 +42,7 @@ fn handle_link<T: DataStore>(
     description: Option<String>,
 ) {
     if url.is_some() {
-        add_link(datastore, url.unwrap(), tags, description)
+        add_link(datastore, url.unwrap(), tags, description);
     } else {
         list_links(datastore);
     }

@@ -115,7 +115,7 @@ pub fn add_link<T: DataStore>(
     url: String,
     tags: Vec<String>,
     description: Option<String>,
-) {
+) -> Link {
     let mut links = datastore.get_links();
     let all_tags = get_tags_from_links(&links);
 
@@ -127,8 +127,12 @@ pub fn add_link<T: DataStore>(
         links.insert(link.url.clone(), link.clone());
 
         datastore.set_links(&links);
+
+        link
     } else {
         println!("Link {url} already exists");
+        let link = links.get(&url);
+        link.unwrap().clone()
     }
 }
 
