@@ -6,8 +6,10 @@
 
 TODO
 
+### Usage (general)
+
 ```
-Mystuff client. Manages links, the wiki, etc
+MyStuff: links, wiki, log journal, etc.
 
 Usage: mystuff [OPTIONS] [COMMAND]
 
@@ -17,10 +19,28 @@ Commands:
 
 Options:
   -d, --data <PATH>  mystuff data directory, default: ~/.mystuff/
-  -v, --verbose      Verbose mode
+  -v, --verbose...   More output per occurrence
+  -q, --quiet...     Less output per occurrence
   -h, --help         Print help
   -V, --version      Print version
 ```
+
+### Usage (links)
+
+```
+Manage links
+
+Usage: mystuff link [OPTIONS]
+
+Options:
+  -a, --add <ADD>                  Add new link
+      --tag <TAG>                  Tags
+  -v, --verbose...                 More output per occurrence
+      --description <DESCRIPTION>  Description
+  -q, --quiet...                   Less output per occurrence
+  -h, --help                       Print help
+```
+
 
 ## Installation
 
