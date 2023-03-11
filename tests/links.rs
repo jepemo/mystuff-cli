@@ -4,14 +4,14 @@ use mystuff::links::add_link;
 
 #[test]
 fn should_add_link() {
-    let datastore = MemoryDataStore::new();
+    let mut datastore = MemoryDataStore::new();
 
     let new_url = String::from("http://www.example.com");
 
     add_link(
-        datastore,
+        &mut datastore,
         new_url.clone(),
-        Vec::new(),
+        vec![String::from("t1"), String::from("t2")],
         Some(String::from("description")),
     );
 

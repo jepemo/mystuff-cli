@@ -36,7 +36,7 @@ pub enum Commands {
 }
 
 fn handle_link<T: DataStore>(
-    datastore: T,
+    datastore: &mut T,
     url: Option<String>,
     tags: Vec<String>,
     description: Option<String>,
@@ -57,7 +57,7 @@ fn main() {
 
     log::debug!("==> cli arguments: {:?}", args);
 
-    let datastore = LocalDataStore::new(args.data);
+    let mut datastore = LocalDataStore::new(args.data);
 
     log::debug!("==> data directory: {:?}", datastore.path);
 
@@ -70,7 +70,7 @@ fn main() {
                 add,
                 tag,
                 description,
-            } => handle_link(datastore, add, tag, description),
+            } => handle_link(&mut datastore, add, tag, description),
         },
     }
 }
