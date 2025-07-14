@@ -1,0 +1,76 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, "3.10", "3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .
+          # Install optional dependencies for testing
+          pip install pytest pytest-cov
+          # Install fzf for integration tests
+          sudo apt-get update
+          sudo apt-get install -y fzf
+
+      - name: Run unit tests
+        run: |
+          python tests/test_init_simple.py
+          python tests/test_link.py
+          python tests/test_meeting.py
+          python tests/test_fzf_integration.py
+
+      - name: Run integration tests with pytest (if available)
+        run: |
+          if command -v pytest &> /dev/null; then
+            pytest tests/ -v --cov=mystuff --cov-report=xml
+          fi
+        continue-on-error: true
+
+      - name: Test CLI commands
+        run: |
+          # Test basic CLI functionality
+          export MYSTUFF_HOME=/tmp/test_mystuff_ci
+          mystuff --version
+          mystuff --help
+          mystuff init --force
+
+          # Test link commands
+          mystuff link add --url "https://github.com" --title "GitHub" --description "Git repository hosting"
+          mystuff link list
+          mystuff link search "GitHub"
+
+          # Test meeting commands
+          mystuff meeting add --title "Test Meeting" --date "2023-12-01" --participants "Alice,Bob"
+          mystuff meeting list
+          mystuff meeting search "Test"
+
+          # Test fzf integration is available
+          which fzf || echo "fzf not available"
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        if: matrix.python-version == '3.11'
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false
