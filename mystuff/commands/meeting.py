@@ -132,6 +132,7 @@ def add_meeting(
     body: Annotated[Optional[str], typer.Option("--body", help="Free-text content or agenda of the meeting")] = None,
     template: Annotated[Optional[str], typer.Option("--template", help="Path to a template file for pre-filling the meeting body")] = None,
     tags: Annotated[Optional[List[str]], typer.Option("--tag", help="One or more tags for categorization")] = None,
+    no_edit: Annotated[bool, typer.Option("--no-edit", help="Don't prompt to edit the meeting note after creation")] = False,
 ):
     """Add a new meeting note"""
     if not title:
@@ -165,7 +166,7 @@ def add_meeting(
     # Check if file already exists
     if file_path.exists():
         typer.echo(f"Meeting note already exists: {filename}")
-        if typer.confirm("Do you want to edit the existing note?"):
+        if not no_edit and typer.confirm("Do you want to edit the existing note?"):
             if open_editor(file_path):
                 typer.echo(f"✅ Meeting note updated: {title}")
         return
@@ -205,8 +206,8 @@ def add_meeting(
         typer.echo(f"   Tags: {', '.join(tags)}")
     typer.echo(f"   File: {filename}")
     
-    # Open in editor if no body was provided
-    if not body:
+    # Open in editor if no body was provided and not disabled
+    if not body and not no_edit:
         if typer.confirm("Do you want to edit the meeting note now?"):
             open_editor(file_path)
 
@@ -513,27 +514,32 @@ def select_meeting_with_fzf(meetings: List[dict]) -> Optional[dict]:
         fzf_input.append(line)
     
     try:
-        # Run fzf
-        process = subprocess.run(
+        # Use a different approach: write to stdin and read from stdout
+        import sys
+        
+        # Create the fzf process
+        fzf_process = subprocess.Popen(
             ['fzf', '--prompt=Select meeting: ', '--height=40%', '--reverse'],
-            input='\n'.join(fzf_input),
-            text=True,
-            capture_output=True,
-            check=True
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=sys.stderr,  # Use parent stderr
+            text=True
         )
         
-        selected_line = process.stdout.strip()
-        if not selected_line:
-            return None
+        # Send input and get output
+        selected_line, _ = fzf_process.communicate(input='\n'.join(fzf_input))
         
-        # Find the corresponding meeting
-        for i, line in enumerate(fzf_input):
-            if line == selected_line:
-                return meetings[i]
+        # Check if fzf was successful
+        if fzf_process.returncode == 0 and selected_line:
+            selected_line = selected_line.strip()
+            # Find the corresponding meeting
+            for i, line in enumerate(fzf_input):
+                if line == selected_line:
+                    return meetings[i]
         
         return None
         
-    except (subprocess.CalledProcessError, FileNotFoundError):
+    except (subprocess.CalledProcessError, FileNotFoundError, KeyboardInterrupt):
         return None
 
 # Create the meeting subcommand app

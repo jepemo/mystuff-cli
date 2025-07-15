@@ -338,6 +338,38 @@ def test_meeting_slugify():
         meeting_file = meetings_dir / "2023-10-05_team-meeting-q4-review-planning-2023.md"
         assert meeting_file.exists()
 
+def test_meeting_add_no_edit():
+    """Test that meeting add with --no-edit doesn't prompt for editing"""
+    runner = CliRunner()
+    
+    with tempfile.TemporaryDirectory() as temp_dir:
+        test_dir = Path(temp_dir) / "test-mystuff"
+        
+        # Set environment for test
+        env = {"MYSTUFF_HOME": str(test_dir)}
+        
+        # Initialize directory first
+        result = runner.invoke(app, ["init"], env=env)
+        assert result.exit_code == 0
+        
+        # Add a meeting with --no-edit
+        result = runner.invoke(app, [
+            "meeting", "add", 
+            "--title", "Team Meeting",
+            "--date", "2023-10-05",
+            "--no-edit"
+        ], env=env)
+        
+        assert result.exit_code == 0
+        assert "Created meeting note: Team Meeting" in result.stdout
+        # Should not contain the prompt for editing
+        assert "Do you want to edit the meeting note now?" not in result.stdout
+        
+        # Check file was created
+        meetings_dir = test_dir / "meetings"
+        meeting_file = meetings_dir / "2023-10-05_team-meeting.md"
+        assert meeting_file.exists()
+
 if __name__ == "__main__":
     print("Running test_meeting_add_basic...")
     test_meeting_add_basic()
@@ -374,5 +406,9 @@ if __name__ == "__main__":
     print("Running test_meeting_slugify...")
     test_meeting_slugify()
     print("✅ test_meeting_slugify passed!")
+    
+    print("Running test_meeting_add_no_edit...")
+    test_meeting_add_no_edit()
+    print("✅ test_meeting_add_no_edit passed!")
     
     print("\n🎉 All meeting tests passed!")

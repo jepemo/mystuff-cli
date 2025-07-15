@@ -47,28 +47,34 @@ def select_link_with_fzf(links: List[dict]) -> Optional[dict]:
     options = []
     for link in links:
         tags_str = f"[{', '.join(link.get('tags', []))}]" if link.get('tags') else ""
-        date_str = link.get('date', '')
-        option = f"{link['title']} | {link['url']} | {date_str} {tags_str}"
+        timestamp = link.get('timestamp', '')
+        option = f"{link['title']} | {link['url']} | {timestamp} {tags_str}"
         options.append(option)
     
     try:
-        # Run fzf with the options
-        result = subprocess.run(
-            ["fzf", "--prompt=Select link: ", "--preview-window=down:3:wrap", "--delimiter=|", "--with-nth=1,2"],
-            input="\n".join(options),
-            text=True,
-            capture_output=True,
-            check=True
+        # Use a different approach: write to stdin and read from stdout
+        import sys
+        
+        # Create the fzf process
+        fzf_process = subprocess.Popen(
+            ["fzf", "--prompt=Select link: ", '--height=40%'],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=sys.stderr,  # Use parent stderr
+            text=True
         )
         
-        # Find the selected link
-        selected_option = result.stdout.strip()
-        if selected_option:
+        # Send input and get output
+        selected_option, _ = fzf_process.communicate(input="\n".join(options))
+        
+        # Check if fzf was successful
+        if fzf_process.returncode == 0 and selected_option:
+            selected_option = selected_option.strip()
             for i, option in enumerate(options):
                 if option == selected_option:
                     return links[i]
         
-    except (subprocess.CalledProcessError, KeyboardInterrupt):
+    except (subprocess.CalledProcessError, KeyboardInterrupt, FileNotFoundError):
         return None
     
     return None

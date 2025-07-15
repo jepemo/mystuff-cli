@@ -59,7 +59,7 @@ run_test "Add link" "mystuff link add --url 'https://github.com' --title 'GitHub
 run_test "List links" "mystuff link list"
 run_test "Search links" "mystuff link search 'GitHub'"
 
-run_test "Add meeting" "mystuff meeting add --title 'Test Meeting' --date '2023-12-01'"
+run_test "Add meeting" "mystuff meeting add --title 'Test Meeting' --date '2023-12-01' --no-edit"
 run_test "List meetings" "mystuff meeting list"
 run_test "Search meetings" "mystuff meeting search 'Test'"
 
