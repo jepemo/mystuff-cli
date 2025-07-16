@@ -49,6 +49,8 @@ run_test "Journal tests" "python tests/test_journal_simple.py"
 run_test "Wiki tests" "python tests/test_wiki_simple.py"
 run_test "Eval tests" "python tests/test_eval_simple.py"
 run_test "Lists tests" "python tests/test_lists_simple.py"
+run_test "GitHub stars tests" "python tests/test_github_stars.py"
+run_test "Error handling tests" "python tests/test_error_handling.py"
 run_test "fzf integration tests" "python tests/test_fzf_integration.py"
 
 # Run integration tests

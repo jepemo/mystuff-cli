@@ -12,6 +12,9 @@ from datetime import datetime
 from urllib.parse import urlparse
 import webbrowser
 import subprocess
+import urllib.request
+import urllib.error
+import time
 
 def get_mystuff_dir() -> Path:
     """Get the mystuff data directory from config or environment"""
@@ -26,6 +29,10 @@ def get_links_file() -> Path:
 
 def ensure_links_file_exists():
     """Ensure the links.jsonl file exists"""
+    # Check if mystuff directory exists first
+    if not check_mystuff_directory_exists():
+        handle_mystuff_directory_error()
+    
     links_file = get_links_file()
     if not links_file.exists():
         links_file.touch()
@@ -115,15 +122,33 @@ def save_links(links: List[dict]):
             f.write(json.dumps(link) + '\n')
 
 def add_link(
-    url: Annotated[str, typer.Option("--url", help="Target URL (required)")],
+    url: Annotated[Optional[str], typer.Option("--url", help="Target URL (required unless importing GitHub stars)")] = None,
     title: Annotated[Optional[str], typer.Option("--title", help="Human-readable title (defaults to URL host)")] = None,
     description: Annotated[Optional[str], typer.Option("--description", help="Optional free-text notes about the link")] = None,
     tags: Annotated[Optional[List[str]], typer.Option("--tag", help="One or more tags for categorization")] = None,
     open_link: Annotated[bool, typer.Option("--open", help="Open the link in the default browser after adding")] = False,
+    github_username: Annotated[Optional[str], typer.Option("--import-github-stars", help="Import GitHub stars for the specified username")] = None,
 ):
-    """Add a new link"""
+    """Add a new link or import GitHub stars"""
+    
+    # Check if mystuff directory exists
+    if not check_mystuff_directory_exists():
+        handle_mystuff_directory_error()
+    
+    # Handle GitHub stars import
+    if github_username:
+        if url or title or description or tags:
+            typer.echo("❌ Cannot use --import-github-stars with other options", err=True)
+            raise typer.Exit(code=1)
+        
+        imported_count = import_github_stars(github_username)
+        if imported_count > 0:
+            typer.echo(f"🎉 Successfully imported {imported_count} GitHub stars!")
+        return
+    
+    # Regular link addition - URL is required
     if not url:
-        typer.echo("Error: URL is required", err=True)
+        typer.echo("Error: URL is required (or use --import-github-stars USERNAME)", err=True)
         raise typer.Exit(code=1)
     
     # Set default title if not provided
@@ -173,6 +198,10 @@ def list_links(
     interactive: Annotated[bool, typer.Option("--interactive", "-i", help="Use fzf for interactive selection")] = False,
 ):
     """List all links"""
+    # Check if mystuff directory exists
+    if not check_mystuff_directory_exists():
+        handle_mystuff_directory_error()
+    
     links = load_links()
     
     if not links:
@@ -232,6 +261,10 @@ def edit_link(
     tags: Annotated[Optional[List[str]], typer.Option("--tag", help="New tags (replaces existing)")] = None,
 ):
     """Edit an existing link"""
+    # Check if mystuff directory exists
+    if not check_mystuff_directory_exists():
+        handle_mystuff_directory_error()
+    
     links = load_links()
     
     if not links:
@@ -276,6 +309,10 @@ def delete_link(
     url: Annotated[Optional[str], typer.Option("--url", help="URL of the link to delete")] = None,
 ):
     """Delete a link"""
+    # Check if mystuff directory exists
+    if not check_mystuff_directory_exists():
+        handle_mystuff_directory_error()
+    
     links = load_links()
     
     if not links:
@@ -310,6 +347,10 @@ def search_links(
     open_link: Annotated[bool, typer.Option("--open", help="Open the first matching link in browser")] = False,
 ):
     """Search links by title, tags, or description"""
+    # Check if mystuff directory exists
+    if not check_mystuff_directory_exists():
+        handle_mystuff_directory_error()
+    
     links = load_links()
     
     if not links:
@@ -340,6 +381,112 @@ def search_links(
     if open_link and matching_links:
         webbrowser.open(matching_links[0]["url"])
 
+def fetch_github_stars(username: str) -> List[dict]:
+    """Fetch GitHub stars for a given username using the public API"""
+    stars = []
+    page = 1
+    per_page = 100
+    
+    while True:
+        url = f"https://api.github.com/users/{username}/starred?per_page={per_page}&page={page}"
+        
+        try:
+            typer.echo(f"Fetching page {page} of GitHub stars for {username}...")
+            request = urllib.request.Request(url)
+            request.add_header('User-Agent', 'mystuff-cli')
+            
+            with urllib.request.urlopen(request) as response:
+                data = json.loads(response.read().decode())
+                
+                if not data:  # No more pages
+                    break
+                
+                for repo in data:
+                    star_info = {
+                        'url': repo['html_url'],
+                        'title': repo['full_name'],
+                        'description': repo['description'] or '',
+                        'tags': [username, 'github'],
+                        'language': repo.get('language', ''),
+                        'stars': repo.get('stargazers_count', 0)
+                    }
+                    stars.append(star_info)
+                
+                # If we got less than per_page results, we're done
+                if len(data) < per_page:
+                    break
+                
+                page += 1
+                # Be nice to the API
+                time.sleep(0.1)
+                
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                typer.echo(f"❌ User '{username}' not found on GitHub", err=True)
+                return []
+            elif e.code == 403:
+                typer.echo("❌ GitHub API rate limit exceeded. Please try again later.", err=True)
+                return []
+            else:
+                typer.echo(f"❌ Error fetching GitHub stars: {e}", err=True)
+                return []
+        except Exception as e:
+            typer.echo(f"❌ Error fetching GitHub stars: {e}", err=True)
+            return []
+    
+    return stars
+
+def import_github_stars(username: str) -> int:
+    """Import GitHub stars for a user and add them as links"""
+    typer.echo(f"🌟 Importing GitHub stars for user: {username}")
+    
+    # Fetch stars from GitHub API
+    stars = fetch_github_stars(username)
+    
+    if not stars:
+        typer.echo("No stars found or error occurred.")
+        return 0
+    
+    # Load existing links
+    existing_links = load_links()
+    existing_urls = {link['url'] for link in existing_links}
+    
+    # Filter out already existing URLs
+    new_stars = [star for star in stars if star['url'] not in existing_urls]
+    
+    if not new_stars:
+        typer.echo(f"All {len(stars)} starred repositories are already in your links.")
+        return 0
+    
+    # Convert stars to link format and add them
+    for star in new_stars:
+        link_entry = {
+            "url": star['url'],
+            "title": star['title'],
+            "description": star['description'],
+            "tags": star['tags'],
+            "timestamp": datetime.now().isoformat()
+        }
+        existing_links.append(link_entry)
+    
+    # Save all links
+    save_links(existing_links)
+    
+    typer.echo(f"✅ Imported {len(new_stars)} new GitHub stars ({len(stars) - len(new_stars)} already existed)")
+    return len(new_stars)
+
+def check_mystuff_directory_exists() -> bool:
+    """Check if the mystuff directory exists"""
+    mystuff_dir = get_mystuff_dir()
+    return mystuff_dir.exists()
+
+def handle_mystuff_directory_error():
+    """Handle the case when mystuff directory doesn't exist"""
+    typer.echo("❌ MyStuff directory not found.", err=True)
+    typer.echo("   Please initialize it first with: mystuff init", err=True)
+    typer.echo("   Or set a custom location with: export MYSTUFF_HOME=/path/to/your/mystuff", err=True)
+    raise typer.Exit(code=1)
+
 # Create the link subcommand app
 link_app = typer.Typer(
     name="link",
@@ -352,3 +499,4 @@ link_app.command("list")(list_links)
 link_app.command("edit")(edit_link)
 link_app.command("delete")(delete_link)
 link_app.command("search")(search_links)
+link_app.command("import_github_stars")(import_github_stars)

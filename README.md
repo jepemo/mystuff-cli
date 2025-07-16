@@ -84,6 +84,7 @@ mystuff init --help
 - `mystuff init` - Initialize the mystuff directory structure
 - `mystuff link` - Manage links with JSONL storage
   - `mystuff link add --url <URL>` - Add a new link
+  - `mystuff link add --import-github-stars <USERNAME>` - Import GitHub stars for a user
   - `mystuff link list` - List all links
   - `mystuff link list --interactive` - Interactive link browser with fzf
   - `mystuff link search <query>` - Search links
@@ -109,6 +110,9 @@ mystuff link add --url "https://github.com/example/repo" \
 # Add a link with auto-generated title
 mystuff link add --url "https://python.org"
 
+# Import GitHub stars for a user
+mystuff link add --import-github-stars "torvalds"
+
 # List all links
 mystuff link list
 
@@ -133,6 +137,31 @@ mystuff link delete
 # Delete a specific link
 mystuff link delete --url "https://python.org"
 ```
+
+#### GitHub Stars Import
+
+You can import all starred repositories from a GitHub user:
+
+```bash
+# Import all stars from a GitHub user
+mystuff link add --import-github-stars "torvalds"
+
+# Import stars from the octocat user (GitHub's demo user)
+mystuff link add --import-github-stars "octocat"
+
+# This will:
+# - Fetch all starred repositories for the user using GitHub's public API
+# - Add them as links with:
+#   - Title: repository full name (e.g., "torvalds/linux")
+#   - Description: repository description from GitHub
+#   - Tags: username and "github"
+# - Skip repositories that are already in your links
+# - Show progress and summary of imported stars
+# - Handle pagination automatically for users with many stars
+# - Respect GitHub API rate limits with proper error handling
+```
+
+**Note**: This feature uses GitHub's public API and doesn't require authentication. However, it's subject to GitHub's rate limits for unauthenticated requests (60 requests per hour per IP address).
 
 #### Meeting Examples
 
