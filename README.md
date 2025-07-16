@@ -14,7 +14,11 @@ A command-line tool for capturing, organizing and retrieving personal knowledge 
 - **Simple file formats**: JSONL / YAML / Markdown
 - **Honors `$EDITOR` and `$PAGER`** for editing and viewing
 - **Tests from day one** (unit + integration)
-- **fzf integration**: Interactive fuzzy finding for links and meetings when available
+- **fzf integration**: Interactive fuzzy finding for all modules when available
+- **GitHub integration**: Import starred repositories from any GitHub user
+- **Export/Import**: Lists support CSV and YAML formats
+- **Full-text search**: Search across all content types
+- **User-friendly error handling**: Clear guidance when directories don't exist
 
 ## Installation
 
@@ -97,6 +101,33 @@ mystuff init --help
   - `mystuff meeting search <query>` - Search meeting notes
   - `mystuff meeting edit [--title <TITLE>]` - Edit a meeting note (uses fzf if title not provided)
   - `mystuff meeting delete [--title <TITLE>]` - Delete a meeting note (uses fzf if title not provided)
+- `mystuff journal` - Manage daily journal entries
+  - `mystuff journal add [--date <DATE>]` - Add a new journal entry
+  - `mystuff journal list` - List all journal entries
+  - `mystuff journal edit [--date <DATE>]` - Edit a journal entry
+  - `mystuff journal search <query>` - Search journal entries by text or date range
+- `mystuff wiki` - Manage topical notes with backlinks
+  - `mystuff wiki new --title <TITLE>` - Create a new wiki note
+  - `mystuff wiki view [--title <TITLE>]` - View a wiki note
+  - `mystuff wiki edit [--title <TITLE>]` - Edit a wiki note
+  - `mystuff wiki list` - List all wiki notes
+  - `mystuff wiki search <query>` - Search wiki notes by title, tags, or content
+  - `mystuff wiki delete [--title <TITLE>]` - Delete a wiki note
+- `mystuff eval` - Manage self-evaluation entries
+  - `mystuff eval add --name <NAME>` - Add a new evaluation entry
+  - `mystuff eval list` - List all evaluations
+  - `mystuff eval edit [--name <NAME>]` - Edit an evaluation
+  - `mystuff eval delete [--name <NAME>]` - Delete an evaluation
+  - `mystuff eval report` - Generate a summary report of evaluations
+- `mystuff list` - Manage arbitrary named lists
+  - `mystuff list create --name <NAME>` - Create a new list
+  - `mystuff list view [--name <NAME>]` - View a list
+  - `mystuff list edit [--name <NAME>]` - Edit a list (add/remove/check items)
+  - `mystuff list list` - List all available lists
+  - `mystuff list search <query>` - Search lists by name or content
+  - `mystuff list delete [--name <NAME>]` - Delete a list
+  - `mystuff list export [--name <NAME>]` - Export a list to CSV/YAML
+  - `mystuff list import` - Import a list from CSV/YAML
 
 #### Link Examples
 
@@ -209,6 +240,97 @@ mystuff meeting delete
 mystuff meeting delete --title "Team Standup" --date "2025-07-14"
 ```
 
+#### Journal Examples
+
+```bash
+# Add a journal entry for today
+mystuff journal add
+
+# Add a journal entry for a specific date
+mystuff journal add --date "2025-07-16"
+
+# List all journal entries
+mystuff journal list
+
+# Search journal entries
+mystuff journal search "project"
+
+# Edit today's journal entry
+mystuff journal edit
+
+# Edit a specific date's entry
+mystuff journal edit --date "2025-07-16"
+```
+
+#### Wiki Examples
+
+```bash
+# Create a new wiki note
+mystuff wiki new --title "Python Tips"
+
+# View a wiki note (uses fzf if title not provided)
+mystuff wiki view --title "Python Tips"
+
+# Edit a wiki note
+mystuff wiki edit --title "Python Tips"
+
+# List all wiki notes
+mystuff wiki list
+
+# Search wiki notes
+mystuff wiki search "python"
+
+# Delete a wiki note
+mystuff wiki delete --title "Python Tips"
+```
+
+#### Evaluation Examples
+
+```bash
+# Add a new evaluation entry
+mystuff eval add --name "Q1 2025 Review"
+
+# List all evaluations
+mystuff eval list
+
+# Edit an evaluation
+mystuff eval edit --name "Q1 2025 Review"
+
+# Generate a report
+mystuff eval report
+
+# Delete an evaluation
+mystuff eval delete --name "Q1 2025 Review"
+```
+
+#### List Examples
+
+```bash
+# Create a new list
+mystuff list create --name "reading-list"
+
+# View a list
+mystuff list view --name "reading-list"
+
+# Edit a list (add/remove/check items)
+mystuff list edit --name "reading-list"
+
+# List all available lists
+mystuff list list
+
+# Search lists
+mystuff list search "reading"
+
+# Export a list to CSV
+mystuff list export --name "reading-list" --format csv
+
+# Import a list from file
+mystuff list import --file mylist.csv --name "imported-list"
+
+# Delete a list
+mystuff list delete --name "reading-list"
+```
+
 ### fzf Integration
 
 If you have `fzf` installed, mystuff provides enhanced interactive features:
@@ -225,8 +347,8 @@ mystuff meeting list --interactive
 # Quick edit/delete with fuzzy selection
 mystuff link edit         # Select link with fzf
 mystuff meeting edit      # Select meeting with fzf
-mystuff link delete       # Select link to delete with fzf
-mystuff meeting delete    # Select meeting to delete with fzf
+mystuff wiki edit         # Select wiki note with fzf
+mystuff list edit         # Select list with fzf
 ```
 
 ## Development
@@ -241,6 +363,12 @@ mystuff meeting delete    # Select meeting to delete with fzf
 python tests/test_init_simple.py
 python tests/test_link.py
 python tests/test_meeting.py
+python tests/test_journal_simple.py
+python tests/test_wiki_simple.py
+python tests/test_eval_simple.py
+python tests/test_lists_simple.py
+python tests/test_github_stars.py
+python tests/test_error_handling.py
 python tests/test_fzf_integration.py
 
 # Install with development dependencies
@@ -286,6 +414,18 @@ git push origin v0.2.1
 
 ## Roadmap
 
-See [PLAN.md](PLAN.md) for the full development roadmap.
+See [docs/PLAN.md](docs/PLAN.md) for the full development roadmap.
 
-Current status: **v0.2 - Meeting Notes** ✅
+Current status: **v0.6 - Lists** ✅
+
+### Completed Features
+
+- ✅ **v0.1** - Basic CLI structure and init command
+- ✅ **v0.2** - Link management with JSONL storage
+- ✅ **v0.3** - Meeting notes with Markdown files
+- ✅ **v0.4** - Journal entries for daily notes
+- ✅ **v0.5** - Wiki notes with backlinks
+- ✅ **v0.6** - Self-evaluation system
+- ✅ **v0.7** - Lists management with full CRUD operations
+- ✅ **GitHub Stars Import** - Import starred repositories from GitHub users
+- ✅ **Enhanced Error Handling** - User-friendly error messages and guidance
