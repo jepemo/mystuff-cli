@@ -31,11 +31,20 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fzf
 
-      - name: Run unit tests
+      - name: Run comprehensive test suite
+        run: |
+          chmod +x run_tests.sh
+          ./run_tests.sh
+
+      - name: Run unit tests individually
         run: |
           python tests/test_init_simple.py
           python tests/test_link.py
           python tests/test_meeting.py
+          python tests/test_journal_simple.py
+          python tests/test_wiki_simple.py
+          python tests/test_eval_simple.py
+          python tests/test_lists_simple.py
           python tests/test_fzf_integration.py
 
       - name: Run integration tests with pytest (if available)
@@ -62,6 +71,17 @@ jobs:
           mystuff meeting add --title "Test Meeting" --date "2023-12-01" --participants "Alice,Bob"
           mystuff meeting list
           mystuff meeting search "Test"
+
+          # Test list commands
+          mystuff list create --name "Test List"
+          mystuff list edit --name "Test List" --item "Test Item"
+          mystuff list view --name "Test List"
+          mystuff list list
+
+          # Test eval commands
+          mystuff eval add --category "test" --score 8 --comments "Test evaluation"
+          mystuff eval list --no-interactive
+          mystuff eval report
 
           # Test fzf integration is available
           which fzf || echo "fzf not available"

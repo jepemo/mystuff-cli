@@ -38,18 +38,18 @@ echo "   Test directory: $MYSTUFF_HOME"
 
 # Install package in development mode
 echo "📦 Installing package in development mode..."
-pip install -e .
+pip install -e ..
 
 # Run unit tests
 echo -e "\n🔧 Running unit tests..."
-run_test "Init tests" "python tests/test_init_simple.py"
-run_test "Link tests" "python tests/test_link.py"
-run_test "Meeting tests" "python tests/test_meeting.py"
-run_test "Journal tests" "python tests/test_journal_simple.py"
-run_test "Wiki tests" "python tests/test_wiki_simple.py"
-run_test "Eval tests" "python tests/test_eval_simple.py"
-run_test "Lists tests" "python tests/test_lists_simple.py"
-run_test "fzf integration tests" "python tests/test_fzf_integration.py"
+run_test "Init tests" "python test_init_simple.py"
+run_test "Link tests" "python test_link.py"
+run_test "Meeting tests" "python test_meeting.py"
+run_test "Journal tests" "python test_journal_simple.py"
+run_test "Wiki tests" "python test_wiki_simple.py"
+run_test "Eval tests" "python test_eval_simple.py"
+run_test "Lists tests" "python test_lists_simple.py"
+run_test "fzf integration tests" "python test_fzf_integration.py"
 
 # Run integration tests
 echo -e "\n🔗 Running integration tests..."
