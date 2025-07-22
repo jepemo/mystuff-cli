@@ -68,9 +68,17 @@ jobs:
           mystuff link search "GitHub"
 
           # Test meeting commands
-          mystuff meeting add --title "Test Meeting" --date "2023-12-01" --participants "Alice,Bob"
+          mystuff meeting add --title "Test Meeting" --date "2023-12-01" --participants "Alice,Bob" --no-edit
           mystuff meeting list
           mystuff meeting search "Test"
+
+          # Test journal commands
+          mystuff journal add --date "2023-12-01" --content "Test journal entry" --no-edit
+          mystuff journal list
+
+          # Test wiki commands  
+          mystuff wiki new --title "Test Page" --content "Test content" --no-edit
+          mystuff wiki list
 
           # Test list commands
           mystuff list create --name "Test List"
@@ -79,9 +87,13 @@ jobs:
           mystuff list list
 
           # Test eval commands
-          mystuff eval add --category "test" --score 8 --comments "Test evaluation"
+          mystuff eval add --category "test" --score 8 --comments "Test evaluation" --no-edit
           mystuff eval list --no-interactive
           mystuff eval report
+
+          # Test sync commands
+          mystuff sync list-commands
+          mystuff sync run --dry-run
 
           # Test fzf integration is available
           which fzf || echo "fzf not available"
