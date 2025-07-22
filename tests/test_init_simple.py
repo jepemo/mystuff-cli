@@ -149,6 +149,13 @@ def test_init_config_yaml_content():
         assert "editor" in config
         assert "pager" in config
         assert "settings" in config
+        assert "sync" in config
+
+        # Check sync section
+        assert "commands" in config["sync"]
+        assert isinstance(config["sync"]["commands"], list)
+        assert len(config["sync"]["commands"]) > 0
+        assert 'echo "Sync data"' in config["sync"]["commands"]
 
         # Check that data_directory is set correctly (should be absolute path)
         # Note: Path resolution may change /tmp to /private/tmp on macOS

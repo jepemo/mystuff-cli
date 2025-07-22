@@ -98,6 +98,11 @@ def init(
                 "date_format": "%Y-%m-%d",
                 "time_format": "%H:%M:%S",
             },
+            "sync": {
+                "commands": [
+                    'echo "Sync data"'
+                ]
+            },
         }
 
         with open(config_file, "w") as f:
