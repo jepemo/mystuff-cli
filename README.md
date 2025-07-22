@@ -1,24 +1,9 @@
 # mystuff-cli
 
-[![Tests](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml/badge.svg)](https://github.com/j- `mystuff list` - Manage arbitrary named lists
-
-- `mystuff list create --name <n>` - Create a new list
-- `mystuff list view [--name <n>]` - View a list
-- `mystuff list edit [--name <n>]` - Edit a list (add/remove/check items)
-- `mystuff list list` - List all available lists
-- `mystuff list search <query>` - Search lists by name or content
-- `mystuff list delete [--name <n>]` - Delete a list
-- `mystuff list export [--name <n>]` - Export a list to CSV/YAML
-- `mystuff list import` - Import a list from CSV/YAML
-- `mystuff sync` - Execute custom sync commands from configuration
-  - `mystuff sync run` - Execute all sync commands defined in config.yaml
-  - `mystuff sync run --dry-run` - Show commands without executing them
-  - `mystuff sync run --verbose` - Show detailed output during execution
-  - `mystuff sync run --continue-on-error` - Continue executing even if one command fails
-  - `mystuff sync list-commands` - List all sync commands defined in config.yamltuff-cli/actions/workflows/test.yml)
-    [![Code Quality](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml)
-    [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-    [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml)
+[![Code Quality](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A command-line tool for capturing, organizing and retrieving personal knowledge efficiently.
 
@@ -395,7 +380,7 @@ sync:
     - rsync -av data/ backup/
 ```
 
-**Cloud synchronization:**
+or: **Cloud synchronization:**
 
 ```yaml
 # config.yaml
@@ -404,33 +389,6 @@ sync:
     - echo 'Syncing to cloud storage...'
     - rclone sync ~/.mystuff/ remote:mystuff/
     - echo 'Cloud sync completed!'
-```
-
-**Database backup:**
-
-```yaml
-# config.yaml
-sync:
-  commands:
-    - echo 'Creating database backup...'
-    - pg_dump mydb > backup/mydb_$(date +%Y%m%d).sql
-    - gzip backup/mydb_$(date +%Y%m%d).sql
-    - echo 'Database backup completed!'
-```
-
-**Complex multi-step sync:**
-
-```yaml
-# config.yaml
-sync:
-  commands:
-    - echo 'Starting comprehensive sync...'
-    - git status
-    - git add . && git commit -m "Auto-sync $(date)" || echo 'Nothing to commit'
-    - git push origin main || echo 'Push failed, continuing...'
-    - rsync -av --delete ~/.mystuff/ /backup/mystuff/
-    - find /backup/mystuff/ -name "*.old" -delete
-    - echo 'Sync completed at $(date)'
 ```
 
 The sync module provides:
@@ -531,13 +489,11 @@ Current status: **v0.7 - Sync** ✅
 
 ### Completed Features
 
-- ✅ **v0.1** - Basic CLI structure and init command
-- ✅ **v0.2** - Link management with JSONL storage
-- ✅ **v0.3** - Meeting notes with Markdown files
-- ✅ **v0.4** - Journal entries for daily notes
-- ✅ **v0.5** - Wiki notes with backlinks
-- ✅ **v0.6** - Self-evaluation system
-- ✅ **v0.7** - Lists management with full CRUD operations
-- ✅ **v0.8** - Custom sync commands for data synchronization
-- ✅ **GitHub Stars Import** - Import starred repositories from GitHub users
-- ✅ **Enhanced Error Handling** - User-friendly error messages and guidance
+- ✅ **v0.0** - Basic CLI structure and init command
+- ✅ **v0.1** - Link management with JSONL storage
+- ✅ **v0.2** - Meeting notes with Markdown files
+- ✅ **v0.3** - Journal entries for daily notes
+- ✅ **v0.4** - Wiki notes with backlinks
+- ✅ **v0.5** - Self-evaluation system
+- ✅ **v0.6** - Lists management with full CRUD operations
+- ✅ **v0.7** - Custom sync commands for data synchronization
