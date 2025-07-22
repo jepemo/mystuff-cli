@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11", "3.12"]
+        python-version: [3.9, "3.10", "3.11", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -31,72 +31,17 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y fzf
 
-      - name: Run comprehensive test suite
+      - name: Run CLI integration tests
         run: |
           chmod +x run_tests.sh
           ./run_tests.sh
 
-      - name: Run unit tests individually
-        run: |
-          python tests/test_init_simple.py
-          python tests/test_link.py
-          python tests/test_meeting.py
-          python tests/test_journal_simple.py
-          python tests/test_wiki_simple.py
-          python tests/test_eval_simple.py
-          python tests/test_lists_simple.py
-          python tests/test_fzf_integration.py
-
-      - name: Run integration tests with pytest (if available)
+      - name: Run unit tests with pytest
         run: |
           if command -v pytest &> /dev/null; then
             pytest tests/ -v --cov=mystuff --cov-report=xml
           fi
         continue-on-error: true
-
-      - name: Test CLI commands
-        run: |
-          # Test basic CLI functionality
-          export MYSTUFF_HOME=/tmp/test_mystuff_ci
-          mystuff --version
-          mystuff --help
-          mystuff init --force
-
-          # Test link commands
-          mystuff link add --url "https://github.com" --title "GitHub" --description "Git repository hosting"
-          mystuff link list
-          mystuff link search "GitHub"
-
-          # Test meeting commands
-          mystuff meeting add --title "Test Meeting" --date "2023-12-01" --participants "Alice,Bob" --no-edit
-          mystuff meeting list
-          mystuff meeting search "Test"
-
-          # Test journal commands
-          mystuff journal add --date "2023-12-01" --content "Test journal entry" --no-edit
-          mystuff journal list
-
-          # Test wiki commands  
-          mystuff wiki new --title "Test Page" --content "Test content" --no-edit
-          mystuff wiki list
-
-          # Test list commands
-          mystuff list create --name "Test List"
-          mystuff list edit --name "Test List" --item "Test Item"
-          mystuff list view --name "Test List"
-          mystuff list list
-
-          # Test eval commands
-          mystuff eval add --category "test" --score 8 --comments "Test evaluation" --no-edit
-          mystuff eval list --no-interactive
-          mystuff eval report
-
-          # Test sync commands
-          mystuff sync list-commands
-          mystuff sync run --dry-run
-
-          # Test fzf integration is available
-          which fzf || echo "fzf not available"
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v3

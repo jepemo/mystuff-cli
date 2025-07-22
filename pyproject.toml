@@ -3,7 +3,7 @@ name = "mystuff-cli"
 version = "0.7.0"
 description = "Personal knowledge management CLI tool"
 readme = "README.md"
-requires-python = ">=3.8.1"
+requires-python = ">=3.9"
 dependencies = [
     "typer>=0.16.0",
     "pyyaml>=6.0",
@@ -46,7 +46,7 @@ dev-dependencies = [
 
 [tool.black]
 line-length = 88
-target-version = ['py38']
+target-version = ['py39']
 include = '\.pyi?$'
 extend-exclude = '''
 /(
@@ -84,7 +84,7 @@ exclude = [
 ]
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.9"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = false
@@ -96,7 +96,7 @@ exclude = [
 
 [tool.ruff]
 line-length = 88
-target-version = "py38"
+target-version = "py39"
 select = [
     "E",  # pycodestyle errors
     "W",  # pycodestyle warnings
