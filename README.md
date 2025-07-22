@@ -1,9 +1,24 @@
 # mystuff-cli
 
-[![Tests](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml)
-[![Code Quality](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Tests](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml/badge.svg)](https://github.com/j- `mystuff list` - Manage arbitrary named lists
+
+- `mystuff list create --name <n>` - Create a new list
+- `mystuff list view [--name <n>]` - View a list
+- `mystuff list edit [--name <n>]` - Edit a list (add/remove/check items)
+- `mystuff list list` - List all available lists
+- `mystuff list search <query>` - Search lists by name or content
+- `mystuff list delete [--name <n>]` - Delete a list
+- `mystuff list export [--name <n>]` - Export a list to CSV/YAML
+- `mystuff list import` - Import a list from CSV/YAML
+- `mystuff sync` - Execute custom sync commands from configuration
+  - `mystuff sync run` - Execute all sync commands defined in config.yaml
+  - `mystuff sync run --dry-run` - Show commands without executing them
+  - `mystuff sync run --verbose` - Show detailed output during execution
+  - `mystuff sync run --continue-on-error` - Continue executing even if one command fails
+  - `mystuff sync list-commands` - List all sync commands defined in config.yamltuff-cli/actions/workflows/test.yml)
+    [![Code Quality](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml)
+    [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+    [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 A command-line tool for capturing, organizing and retrieving personal knowledge efficiently.
 
@@ -19,6 +34,7 @@ A command-line tool for capturing, organizing and retrieving personal knowledge 
 - **Export/Import**: Lists support CSV and YAML formats
 - **Full-text search**: Search across all content types
 - **User-friendly error handling**: Clear guidance when directories don't exist
+- **Custom sync commands**: Execute personalized command sequences for data synchronization
 
 ## Installation
 
@@ -331,6 +347,100 @@ mystuff list import --file mylist.csv --name "imported-list"
 mystuff list delete --name "reading-list"
 ```
 
+#### Sync Examples
+
+```bash
+# First, configure sync commands in config.yaml
+cat > ~/.mystuff/config.yaml << EOF
+sync:
+  commands:
+    - echo 'Starting data synchronization...'
+    - git add . && git commit -m "Auto-sync $(date)"
+    - rsync -av ~/.mystuff/ /backup/mystuff/
+    - echo 'Backup completed successfully!'
+EOF
+
+# Execute all sync commands
+mystuff sync run
+
+# Preview commands without executing (dry run)
+mystuff sync run --dry-run
+
+# Execute with detailed output
+mystuff sync run --verbose
+
+# Continue executing remaining commands even if one fails
+mystuff sync run --continue-on-error
+
+# Combine flags for detailed dry run
+mystuff sync run --dry-run --verbose
+
+# List all configured sync commands
+mystuff sync list-commands
+```
+
+#### Sync Configuration
+
+The sync module reads commands from the `sync.commands` section in your `config.yaml` file. Here are some practical examples:
+
+**Basic backup and git sync:**
+
+```yaml
+# config.yaml
+sync:
+  commands:
+    - git add .
+    - git commit -m "Auto-sync $(date)"
+    - git push origin main
+    - rsync -av data/ backup/
+```
+
+**Cloud synchronization:**
+
+```yaml
+# config.yaml
+sync:
+  commands:
+    - echo 'Syncing to cloud storage...'
+    - rclone sync ~/.mystuff/ remote:mystuff/
+    - echo 'Cloud sync completed!'
+```
+
+**Database backup:**
+
+```yaml
+# config.yaml
+sync:
+  commands:
+    - echo 'Creating database backup...'
+    - pg_dump mydb > backup/mydb_$(date +%Y%m%d).sql
+    - gzip backup/mydb_$(date +%Y%m%d).sql
+    - echo 'Database backup completed!'
+```
+
+**Complex multi-step sync:**
+
+```yaml
+# config.yaml
+sync:
+  commands:
+    - echo 'Starting comprehensive sync...'
+    - git status
+    - git add . && git commit -m "Auto-sync $(date)" || echo 'Nothing to commit'
+    - git push origin main || echo 'Push failed, continuing...'
+    - rsync -av --delete ~/.mystuff/ /backup/mystuff/
+    - find /backup/mystuff/ -name "*.old" -delete
+    - echo 'Sync completed at $(date)'
+```
+
+The sync module provides:
+
+- **Flexible command execution**: Any shell command or script can be included
+- **Error handling**: Choose whether to stop on first error or continue with remaining commands
+- **Progress feedback**: Visual indicators and detailed output options
+- **Dry run mode**: Preview commands before execution for safety
+- **Directory context**: All commands execute within your mystuff directory
+
 ### fzf Integration
 
 If you have `fzf` installed, mystuff provides enhanced interactive features:
@@ -367,6 +477,7 @@ python tests/test_journal_simple.py
 python tests/test_wiki_simple.py
 python tests/test_eval_simple.py
 python tests/test_lists_simple.py
+python tests/test_sync.py
 python tests/test_github_stars.py
 python tests/test_error_handling.py
 python tests/test_fzf_integration.py
@@ -416,7 +527,7 @@ git push origin v0.2.1
 
 See [docs/PLAN.md](docs/PLAN.md) for the full development roadmap.
 
-Current status: **v0.6 - Lists** ✅
+Current status: **v0.7 - Sync** ✅
 
 ### Completed Features
 
@@ -427,5 +538,6 @@ Current status: **v0.6 - Lists** ✅
 - ✅ **v0.5** - Wiki notes with backlinks
 - ✅ **v0.6** - Self-evaluation system
 - ✅ **v0.7** - Lists management with full CRUD operations
+- ✅ **v0.8** - Custom sync commands for data synchronization
 - ✅ **GitHub Stars Import** - Import starred repositories from GitHub users
 - ✅ **Enhanced Error Handling** - User-friendly error messages and guidance

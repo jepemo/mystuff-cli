@@ -13,6 +13,7 @@ from mystuff.commands.journal import journal_app
 from mystuff.commands.wiki import wiki_app
 from mystuff.commands.eval import eval_app
 from mystuff.commands.lists import list_app
+from mystuff.commands.sync import sync_app
 
 app = typer.Typer(
     name="mystuff",
@@ -41,6 +42,9 @@ app.add_typer(eval_app, name="eval")
 # Add the list command group
 app.add_typer(list_app, name="list")
 
+# Add the sync command group
+app.add_typer(sync_app, name="sync")
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
@@ -57,7 +61,7 @@ def main(
     MyStuff CLI - Personal knowledge management tool
     """
     if version:
-        typer.echo("mystuff 0.6.0")
+        typer.echo("mystuff 0.7.0")
         raise typer.Exit()
     
     # If no command is provided, show help

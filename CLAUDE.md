@@ -26,3 +26,31 @@ Use these commands:
 - Or using uv CLI:
   - `uv add package-name --script script.py`
   - `uv remove package-name --script script.py`
+
+## Testing Requirements
+
+- **Always verify tests** after making any changes to the codebase
+- Run the complete test suite with: `./run_tests.sh`
+- Run individual unit tests with: `uv run pytest tests/`
+- Ensure all tests pass before considering a feature complete
+
+## Testing with Custom Directory
+
+- **Use the `-d` parameter** when testing to avoid overwriting the default mystuff directory
+- The default directory (`~/.mystuff`) may be in active use
+- Examples:
+
+  ```bash
+  # Test with custom directory
+  export MYSTUFF_HOME="/tmp/mystuff-test"
+  mystuff init
+  mystuff link add --url "https://example.com" --title "Test Link"
+
+  # Or use a temporary directory for each test session
+  MYSTUFF_HOME="/tmp/mystuff-$(date +%s)" mystuff init
+  ```
+
+- Always clean up test directories after testing:
+  ```bash
+  rm -rf /tmp/mystuff-test
+  ```

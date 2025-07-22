@@ -7,7 +7,7 @@ import shutil
 from pathlib import Path
 from typer.testing import CliRunner
 
-from mystuff.commands.init import app
+from mystuff.commands.init import init
 
 def test_init_create_default_structure():
     """Test that init create creates the expected directory structure"""
