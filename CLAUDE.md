@@ -34,6 +34,21 @@ Use these commands:
 - Run individual unit tests with: `uv run pytest tests/`
 - Ensure all tests pass before considering a feature complete
 
+## Code Quality and Linting
+
+- **After running tests**, always execute code quality checks and auto-fixes:
+  ```bash
+  make fix-all && make check-ci
+  ```
+- This command will:
+  1. `make fix-all`: Automatically fix imports, whitespace, and formatting issues
+  2. `make check-ci`: Run the same checks as GitHub Actions to verify code quality
+- **If errors are found**, fix them before proceeding:
+  - Most errors will be auto-fixed by `make fix-all`
+  - Remaining errors (if any) should be fixed manually
+  - Re-run `make check-ci` to verify all issues are resolved
+- **This ensures** your code will pass CI/CD checks before committing
+
 ## Testing with Custom Directory
 
 - **Use the `-d` parameter** when testing to avoid overwriting the default mystuff directory

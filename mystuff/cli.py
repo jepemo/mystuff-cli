@@ -2,18 +2,18 @@
 """
 MyStuff CLI - Personal knowledge management tool
 """
+
 import typer
-from pathlib import Path
 from typing_extensions import Annotated
 
-from mystuff.commands.init import init
-from mystuff.commands.link import link_app
-from mystuff.commands.meeting import meeting_app
-from mystuff.commands.journal import journal_app
-from mystuff.commands.wiki import wiki_app
 from mystuff.commands.eval import eval_app
+from mystuff.commands.init import init
+from mystuff.commands.journal import journal_app
+from mystuff.commands.link import link_app
 from mystuff.commands.lists import list_app
+from mystuff.commands.meeting import meeting_app
 from mystuff.commands.sync import sync_app
+from mystuff.commands.wiki import wiki_app
 
 app = typer.Typer(
     name="mystuff",
@@ -45,16 +45,12 @@ app.add_typer(list_app, name="list")
 # Add the sync command group
 app.add_typer(sync_app, name="sync")
 
+
 @app.callback(invoke_without_command=True)
 def main(
     ctx: typer.Context,
     version: Annotated[
-        bool, 
-        typer.Option(
-            "--version", 
-            "-v", 
-            help="Show version and exit"
-        )
+        bool, typer.Option("--version", "-v", help="Show version and exit")
     ] = False,
 ):
     """
@@ -63,7 +59,7 @@ def main(
     if version:
         typer.echo("mystuff 0.7.0")
         raise typer.Exit()
-    
+
     # If no command is provided, show help
     if ctx.invoked_subcommand is None:
         typer.echo(ctx.get_help())
