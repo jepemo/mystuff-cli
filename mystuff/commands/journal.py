@@ -125,19 +125,19 @@ def display_journal_entry(entry: dict):
     date = entry.get("date", "Unknown date")
     tags = entry.get("tags", [])
     body = entry.get("body", "")
-    
+
     typer.echo(f"📅 Date: {date}")
-    
+
     if tags:
         tags_str = ", ".join(tags)
         typer.echo(f"🏷️  Tags: {tags_str}")
-    
+
     if body:
-        typer.echo(f"\n📝 Content:")
+        typer.echo("\n📝 Content:")
         typer.echo(body)
     else:
         typer.echo("\n📝 Content: (empty)")
-    
+
     typer.echo()  # Add blank line for spacing
 
 
@@ -160,28 +160,32 @@ def select_journal_with_fzf(entries: List[dict]) -> Optional[dict]:
         options.append(option)
 
     # Create a temporary file with the options
-    import tempfile
     import os
-    import sys
+    import tempfile
 
-    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as temp_file:
+    with tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".txt", encoding="utf-8"
+    ) as temp_file:
         for option in options:
-            temp_file.write(option + '\n')
+            temp_file.write(option + "\n")
         temp_file_path = temp_file.name
 
     try:
         # Use os.system to allow fzf to control the terminal directly
         # Redirect the selected option to a temporary output file
-        output_file = tempfile.mktemp(suffix='.txt')
-        
-        cmd = f"cat {temp_file_path} | fzf --height=40% --layout=reverse --prompt='Select journal entry: ' > {output_file}"
+        output_file = tempfile.mktemp(suffix=".txt")
+
+        cmd = (
+            f"cat {temp_file_path} | fzf --height=40% --layout=reverse "
+            f"--prompt='Select journal entry: ' > {output_file}"
+        )
         result = os.system(cmd)
 
         if result == 0:  # Success
             try:
-                with open(output_file, 'r', encoding='utf-8') as f:
+                with open(output_file, "r", encoding="utf-8") as f:
                     selected_line = f.read().strip()
-                
+
                 if selected_line:
                     # Find the corresponding entry
                     for i, option in enumerate(options):
