@@ -1,72 +1,78 @@
-# mystuff-cli 🗃️
+# mystuff-cli
 
 [![Tests](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/test.yml)
 [![Code Quality](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml/badge.svg)](https://github.com/jepemo/mystuff-cli/actions/workflows/code-quality.yml)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> Capture everything. Find anything. From the terminal you already love.
+> Capture, organise, and retrieve personal knowledge—directly from your terminal.
 
 ---
 
-mystuff‑cli is a **single‑binary, zero‑DB toolkit** for developers who live in `$SHELL` but still forget where they parked that brilliant idea from last week.
+_mystuff‑cli_ is a single‑binary command‑line toolkit that saves links, notes, meetings, journals, lists, and self‑evaluations in version‑controlled plain‑text files. No databases, no lock‑in—just your data, under Git.
 
-## 👟 TL;DR (60 seconds)
-
-```bash
-pipx install mystuff-cli      # or: git clone && pip install -e .
-mystuff init                  # bootstrap ~/.mystuff
-mystuff link add --url https://python.org
-mystuff link search python    # 🥳  found it!
-```
-
-## ✨ Highlights
-
-- **Batteries included** – links, journal, meetings, wiki, lists, self‑evals.
-- **Plain files, plain joy** – JSONL / Markdown / YAML. 100% Git‑friendly.
-- **Bring‑your‑own‑editor** – respects `$EDITOR` & `$PAGER` out of the box.
-- **Instant fuzzy magic** – optional [`fzf`](https://github.com/junegunn/fzf) everywhere.
-- **Full‑text search** – across _all_ modules in one go.
-- **GitHub stars importer** – turn "I’ll read that later" into actual knowledge.
-- **Scriptable sync** – run any shell you fancy and pretend it’s automation.
-
-_(Need every sub‑command? See [/docs/CLI.md](docs/CLI.md).)_
-
-## 🚀 Installation
+## Quick start
 
 ```bash
-# pipx (recommended)
+# Install (recommended)
 pipx install mystuff-cli
 
-# pip
+# Initialise workspace
+mystuff init                  # creates ~/.mystuff
+
+# First bookmark
+mystuff link add --url https://python.org
+mystuff link search python    # locate saved links
+```
+
+## Key features
+
+- **Comprehensive toolkit** – links, journal, meetings, wiki, lists, self‑evals.
+- **Plain‑text storage** – JSONL / Markdown / YAML; ideal for Git workflows.
+- **Editor integration** – honours `$EDITOR` and `$PAGER`.
+- **fzf support** – interactive selection where available.
+- **Full‑text search** – across every module.
+- **GitHub stars importer** – capture starred repositories as bookmarks.
+- **Configurable sync** – run user‑defined shell commands for backup or deployment.
+
+_(Command reference available in [/docs/CLI.md](docs/CLI.md).)_
+
+## Installation
+
+```bash
+# pipx
+pipx install mystuff-cli
+
+# From source
 git clone https://github.com/jepemo/mystuff-cli.git
 cd mystuff-cli
 pip install -e .
 ```
 
-### Optional Goodies
+### Optional tools
 
-| Tool      | Why you might want it                    |
-| --------- | ---------------------------------------- |
-| `fzf`     | buttery‑smooth interactive pickers       |
-| `ripgrep` | faster cross‑note search (auto‑detected) |
+| Tool      | Purpose                                 |
+| --------- | --------------------------------------- |
+| `fzf`     | Interactive pickers for list/edit tasks |
+| `ripgrep` | Faster recursive search (auto‑detected) |
 
-## 📂 Anatomy of `~/.mystuff`
+## Directory structure
 
 ```
-links.jsonl          # bookmarks & repos
-journal/2025-07-23.md
-meeting/2025/standup.md
-wiki/elixir-patterns.md
-lists/reading.yaml
-config.yaml
+~/.mystuff/
+├── links.jsonl           # bookmarks & repositories
+├── journal/2025‑07‑28.md
+├── meeting/2025/standup.md
+├── wiki/elixir‑patterns.md
+├── lists/reading.yaml
+└── config.yaml
 ```
 
-It’s all plain text. Lose the binary, keep your knowledge.
+All data is stored as plain text for transparency and portability.
 
-## 🔄 Syncing (a.k.a. "my future self will thank me")
+## Syncing
 
-Add any shell commands to `sync.commands` in `config.yaml`:
+Define any shell commands under `sync.commands` in `config.yaml`:
 
 ```yaml
 sync:
@@ -76,34 +82,32 @@ sync:
     - rsync -av ~/.mystuff /backup/mystuff
 ```
 
-Then run:
+Execute them with:
 
 ```bash
 mystuff sync run --verbose
 ```
 
-## 🛠️ Extending
+## Extending
 
-- New content types live under `mystuff/modules/`.
-- Commands are plain [Click](https://click.palletsprojects.com/) groups.
-- Tests: pytest with coverage from day zero.
+- New content types live in `mystuff/modules/`.
+- Commands are implemented with [Click](https://click.palletsprojects.com/).
+- Tests use `pytest` and run in CI on every push.
 
-See [/CONTRIBUTING.md](CONTRIBUTING.md).
+See [/CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
-## 🗺️ Roadmap
+## Roadmap
 
-| Version | Status      | Key theme                    |
-| ------- | ----------- | ---------------------------- |
-| v0.7    | **Current** | Custom sync commands         |
-| v0.8    | In progress | Testing and stability        |
-| v1.0    | Planned     | Stable public API && Release |
+| Version | Status      | Theme                |
+| ------- | ----------- | -------------------- |
+| v0.7    | **Current** | Custom sync commands |
+| v0.8    | In progress | Encrypted vaults     |
+| v1.0    | Planned     | Stable public API    |
 
-Full plan lives in [/docs/PLAN.md](docs/PLAN.md).
+Full roadmap: [/docs/PLAN.md](docs/PLAN.md).
 
-## 📜 License
+## License
 
-MIT – because knowledge wants to be free.
+MIT License.
 
 ---
-
-_Built by developers who keep forgetting things so you don’t have to._ ✨

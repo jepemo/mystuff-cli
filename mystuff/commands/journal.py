@@ -120,6 +120,27 @@ def get_all_journal_entries() -> List[dict]:
     return entries
 
 
+def display_journal_entry(entry: dict):
+    """Display a single journal entry in detail"""
+    date = entry.get("date", "Unknown date")
+    tags = entry.get("tags", [])
+    body = entry.get("body", "")
+    
+    typer.echo(f"📅 Date: {date}")
+    
+    if tags:
+        tags_str = ", ".join(tags)
+        typer.echo(f"🏷️  Tags: {tags_str}")
+    
+    if body:
+        typer.echo(f"\n📝 Content:")
+        typer.echo(body)
+    else:
+        typer.echo("\n📝 Content: (empty)")
+    
+    typer.echo()  # Add blank line for spacing
+
+
 def select_journal_with_fzf(entries: List[dict]) -> Optional[dict]:
     """Use fzf to select a journal entry interactively"""
     if not entries:
@@ -138,31 +159,53 @@ def select_journal_with_fzf(entries: List[dict]) -> Optional[dict]:
         option = f"{date} {tags_str} {body_preview}"
         options.append(option)
 
-    # Run fzf
-    try:
-        process = subprocess.run(
-            [
-                "fzf",
-                "--height=40%",
-                "--layout=reverse",
-                "--prompt=Select journal entry: ",
-            ],
-            input="\n".join(options),
-            text=True,
-            capture_output=True,
-        )
+    # Create a temporary file with the options
+    import tempfile
+    import os
+    import sys
 
-        if process.returncode == 0:
-            selected_line = process.stdout.strip()
-            # Find the corresponding entry
-            for i, option in enumerate(options):
-                if option == selected_line:
-                    return entries[i]
+    with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.txt', encoding='utf-8') as temp_file:
+        for option in options:
+            temp_file.write(option + '\n')
+        temp_file_path = temp_file.name
+
+    try:
+        # Use os.system to allow fzf to control the terminal directly
+        # Redirect the selected option to a temporary output file
+        output_file = tempfile.mktemp(suffix='.txt')
+        
+        cmd = f"cat {temp_file_path} | fzf --height=40% --layout=reverse --prompt='Select journal entry: ' > {output_file}"
+        result = os.system(cmd)
+
+        if result == 0:  # Success
+            try:
+                with open(output_file, 'r', encoding='utf-8') as f:
+                    selected_line = f.read().strip()
+                
+                if selected_line:
+                    # Find the corresponding entry
+                    for i, option in enumerate(options):
+                        if option == selected_line:
+                            return entries[i]
+            except FileNotFoundError:
+                pass  # No selection made
+            finally:
+                # Clean up output file
+                try:
+                    os.unlink(output_file)
+                except OSError:
+                    pass
 
         return None
     except Exception as e:
         typer.echo(f"Error running fzf: {e}", err=True)
         return None
+    finally:
+        # Clean up temporary input file
+        try:
+            os.unlink(temp_file_path)
+        except OSError:
+            pass
 
 
 def parse_date_range(range_str: str) -> tuple[str, str]:
@@ -345,9 +388,8 @@ def list_journal_entries(
     if not no_interactive and is_fzf_available():
         selected_entry = select_journal_with_fzf(entries)
         if selected_entry:
-            file_path = selected_entry["file_path"]
-            if open_editor(file_path):
-                typer.echo(f"✅ Journal entry opened for {selected_entry['date']}")
+            # Display the selected entry
+            display_journal_entry(selected_entry)
         return
 
     # Display entries
