@@ -269,26 +269,57 @@ def select_wiki_with_fzf(notes: List[dict]) -> Optional[dict]:
         option = f"{title} {tags_str} {aliases_str} {body_preview}"
         options.append(option)
 
-    # Run fzf
-    try:
-        process = subprocess.run(
-            ["fzf", "--height=40%", "--layout=reverse", "--prompt=Select wiki note: "],
-            input="\n".join(options),
-            text=True,
-            capture_output=True,
-        )
+    # Create a temporary file with the options
+    import os
+    import tempfile
 
-        if process.returncode == 0:
-            selected_line = process.stdout.strip()
-            # Find the corresponding note
-            for i, option in enumerate(options):
-                if option == selected_line:
-                    return notes[i]
+    with tempfile.NamedTemporaryFile(
+        mode="w", delete=False, suffix=".txt", encoding="utf-8"
+    ) as temp_file:
+        for option in options:
+            temp_file.write(option + "\n")
+        temp_file_path = temp_file.name
+
+    try:
+        # Use os.system to allow fzf to control the terminal directly
+        # Redirect the selected option to a temporary output file
+        output_file = tempfile.mktemp(suffix=".txt")
+
+        cmd = (
+            f"cat {temp_file_path} | fzf --height=40% --layout=reverse "
+            f"--prompt='Select wiki note: ' > {output_file}"
+        )
+        result = os.system(cmd)
+
+        if result == 0:  # Success
+            try:
+                with open(output_file, "r", encoding="utf-8") as f:
+                    selected_line = f.read().strip()
+
+                if selected_line:
+                    # Find the corresponding note
+                    for i, option in enumerate(options):
+                        if option == selected_line:
+                            return notes[i]
+            except FileNotFoundError:
+                pass  # No selection made
+            finally:
+                # Clean up output file
+                try:
+                    os.unlink(output_file)
+                except OSError:
+                    pass
 
         return None
     except Exception as e:
         typer.echo(f"Error running fzf: {e}", err=True)
         return None
+    finally:
+        # Clean up temporary input file
+        try:
+            os.unlink(temp_file_path)
+        except OSError:
+            pass
 
 
 def search_notes_by_text(notes: List[dict], search_text: str) -> List[dict]:

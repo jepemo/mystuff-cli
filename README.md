@@ -88,20 +88,11 @@ Execute them with:
 mystuff sync run --verbose
 ```
 
-## Extending
-
-- New content types live in `mystuff/modules/`.
-- Commands are implemented with [Click](https://click.palletsprojects.com/).
-- Tests use `pytest` and run in CI on every push.
-
-See [/CONTRIBUTING.md](CONTRIBUTING.md) for details.
-
 ## Roadmap
 
 | Version | Status      | Theme                |
 | ------- | ----------- | -------------------- |
 | v0.7    | **Current** | Custom sync commands |
-| v0.8    | In progress | Encrypted vaults     |
 | v1.0    | Planned     | Stable public API    |
 
 Full roadmap: [/docs/PLAN.md](docs/PLAN.md).
