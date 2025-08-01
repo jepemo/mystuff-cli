@@ -116,10 +116,11 @@ def test_load_sync_config_no_sync_section():
 def test_execute_sync_commands_dry_run(temp_mystuff_dir):
     """Test executing sync commands in dry run mode."""
     commands = ['echo "test1"', 'echo "test2"']
+    config = {"data_directory": str(temp_mystuff_dir)}
 
     # Dry run should always succeed
     success = execute_sync_commands(
-        commands=commands, mystuff_dir=temp_mystuff_dir, dry_run=True
+        commands=commands, mystuff_dir=temp_mystuff_dir, config=config, dry_run=True
     )
 
     assert success is True
@@ -128,9 +129,10 @@ def test_execute_sync_commands_dry_run(temp_mystuff_dir):
 def test_execute_sync_commands_success(temp_mystuff_dir):
     """Test executing sync commands successfully."""
     commands = ['echo "test1"', 'echo "test2"']
+    config = {"data_directory": str(temp_mystuff_dir)}
 
     success = execute_sync_commands(
-        commands=commands, mystuff_dir=temp_mystuff_dir, dry_run=False, verbose=False
+        commands=commands, mystuff_dir=temp_mystuff_dir, config=config, dry_run=False, verbose=False
     )
 
     assert success is True
@@ -139,10 +141,12 @@ def test_execute_sync_commands_success(temp_mystuff_dir):
 def test_execute_sync_commands_failure(temp_mystuff_dir):
     """Test executing sync commands with failure."""
     commands = ['echo "test1"', "false", 'echo "test3"']  # false command will fail
+    config = {"data_directory": str(temp_mystuff_dir)}
 
     success = execute_sync_commands(
         commands=commands,
         mystuff_dir=temp_mystuff_dir,
+        config=config,
         dry_run=False,
         continue_on_error=False,
     )
@@ -153,10 +157,12 @@ def test_execute_sync_commands_failure(temp_mystuff_dir):
 def test_execute_sync_commands_continue_on_error(temp_mystuff_dir):
     """Test executing sync commands with continue on error."""
     commands = ['echo "test1"', "false", 'echo "test3"']  # false command will fail
+    config = {"data_directory": str(temp_mystuff_dir)}
 
     success = execute_sync_commands(
         commands=commands,
         mystuff_dir=temp_mystuff_dir,
+        config=config,
         dry_run=False,
         continue_on_error=True,
     )
@@ -167,9 +173,10 @@ def test_execute_sync_commands_continue_on_error(temp_mystuff_dir):
 def test_execute_sync_commands_empty_list(temp_mystuff_dir):
     """Test executing empty command list."""
     commands = []
+    config = {"data_directory": str(temp_mystuff_dir)}
 
     success = execute_sync_commands(
-        commands=commands, mystuff_dir=temp_mystuff_dir, dry_run=False
+        commands=commands, mystuff_dir=temp_mystuff_dir, config=config, dry_run=False
     )
 
     assert success is True

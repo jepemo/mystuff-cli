@@ -27,8 +27,8 @@ def get_mystuff_dir() -> Optional[Path]:
     return None
 
 
-def load_sync_config(mystuff_dir: Path) -> Dict[str, Any]:
-    """Load sync configuration from config.yaml."""
+def load_config(mystuff_dir: Path) -> Dict[str, Any]:
+    """Load complete configuration from config.yaml."""
     config_file = mystuff_dir / "config.yaml"
 
     if not config_file.exists():
@@ -49,6 +49,13 @@ def load_sync_config(mystuff_dir: Path) -> Dict[str, Any]:
         typer.echo("❌ Empty configuration file", err=True)
         raise typer.Exit(1)
 
+    return config
+
+
+def load_sync_config(mystuff_dir: Path) -> Dict[str, Any]:
+    """Load sync configuration from config.yaml."""
+    config = load_config(mystuff_dir)
+    
     # Get sync configuration
     sync_config = config.get("sync", {})
     if not sync_config:
@@ -61,6 +68,7 @@ def load_sync_config(mystuff_dir: Path) -> Dict[str, Any]:
 def execute_sync_commands(
     commands: List[str],
     mystuff_dir: Path,
+    config: Dict[str, Any],
     dry_run: bool = False,
     verbose: bool = False,
     continue_on_error: bool = False,
@@ -69,6 +77,23 @@ def execute_sync_commands(
     if not commands:
         typer.echo("ℹ️  No commands to execute")
         return True
+
+    # Prepare environment variables
+    import os
+    env = os.environ.copy()
+    
+    # Set MYSTUFF_HOME if not already set
+    if "MYSTUFF_HOME" not in env:
+        data_directory = config.get("data_directory")
+        if data_directory:
+            env["MYSTUFF_HOME"] = str(data_directory)
+            if verbose:
+                typer.echo(f"🔧 Setting MYSTUFF_HOME={data_directory}")
+        else:
+            # Fallback to mystuff_dir if no data_directory in config
+            env["MYSTUFF_HOME"] = str(mystuff_dir)
+            if verbose:
+                typer.echo(f"🔧 Setting MYSTUFF_HOME={mystuff_dir} (fallback)")
 
     success = True
 
@@ -80,13 +105,14 @@ def execute_sync_commands(
             continue
 
         try:
-            # Execute command in the mystuff directory
+            # Execute command in the mystuff directory with updated environment
             result = subprocess.run(
                 command,
                 shell=True,
                 cwd=mystuff_dir,
                 capture_output=not verbose,
                 text=True,
+                env=env,
             )
 
             if result.returncode != 0:
@@ -151,8 +177,13 @@ def run(
         typer.echo("❌ No mystuff directory found. Run 'mystuff init' first.", err=True)
         raise typer.Exit(1)
 
-    # Load sync configuration
-    sync_config = load_sync_config(mystuff_dir)
+    # Load complete configuration
+    config = load_config(mystuff_dir)
+    sync_config = config.get("sync", {})
+    
+    if not sync_config:
+        typer.echo("❌ No 'sync' section found in config.yaml", err=True)
+        raise typer.Exit(1)
 
     # Get commands
     commands = sync_config.get("commands", [])
@@ -176,6 +207,7 @@ def run(
     success = execute_sync_commands(
         commands=commands,
         mystuff_dir=mystuff_dir,
+        config=config,
         dry_run=dry_run,
         verbose=verbose,
         continue_on_error=continue_on_error,
