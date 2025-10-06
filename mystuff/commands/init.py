@@ -72,7 +72,7 @@ def init(
         raise typer.Exit(code=1)
 
     # Create directories with .gitkeep files
-    directories = ["meetings", "journal", "wiki", "eval", "lists"]
+    directories = ["meetings", "journal", "wiki", "eval", "lists", "learning"]
 
     for directory in directories:
         dir_path = base_dir / directory
@@ -85,6 +85,18 @@ def init(
         except OSError as e:
             typer.echo(f"Error creating directory {dir_path}: {e}")
             raise typer.Exit(code=1)
+
+    # Create learning subdirectories
+    learning_lessons_dir = base_dir / "learning" / "lessons"
+    try:
+        learning_lessons_dir.mkdir(parents=True, exist_ok=True)
+        # Create .gitkeep file for empty lessons directory
+        gitkeep_file = learning_lessons_dir / ".gitkeep"
+        gitkeep_file.touch()
+        typer.echo(f"Created directory: {learning_lessons_dir}")
+    except OSError as e:
+        typer.echo(f"Error creating directory {learning_lessons_dir}: {e}")
+        raise typer.Exit(code=1)
 
     # Create default config.yaml file
     config_file = base_dir / "config.yaml"

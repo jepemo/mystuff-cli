@@ -223,7 +223,7 @@ def test_sync_run_command_no_mystuff_dir(runner):
             os.chdir(temp_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
-            assert "No mystuff directory found" in result.stderr
+            assert "No mystuff directory found" in result.output
         finally:
             os.chdir(original_cwd)
 
@@ -283,7 +283,7 @@ def test_sync_with_invalid_config(runner):
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
-            assert "Error parsing config.yaml" in result.stderr
+            assert "Error parsing config.yaml" in result.output
         finally:
             os.chdir(original_cwd)
 
@@ -306,6 +306,6 @@ def test_sync_with_non_list_commands(runner):
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
-            assert "must be a list" in result.stderr
+            assert "must be a list" in result.output
         finally:
             os.chdir(original_cwd)

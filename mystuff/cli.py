@@ -9,6 +9,7 @@ from typing_extensions import Annotated
 from mystuff.commands.eval import eval_app
 from mystuff.commands.init import init
 from mystuff.commands.journal import journal_app
+from mystuff.commands.learn import learn_app
 from mystuff.commands.link import link_app
 from mystuff.commands.lists import list_app
 from mystuff.commands.meeting import meeting_app
@@ -41,6 +42,9 @@ app.add_typer(eval_app, name="eval")
 
 # Add the list command group
 app.add_typer(list_app, name="list")
+
+# Add the learn command group
+app.add_typer(learn_app, name="learn")
 
 # Add the sync command group
 app.add_typer(sync_app, name="sync")
