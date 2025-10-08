@@ -301,3 +301,132 @@ def test_nested_directory_structure(temp_learning_dir):
 
     assert len(lessons) == 1
     assert lessons[0]["name"] == "level1/level2/level3/deep-lesson.md"
+
+
+def test_convert_markdown_to_html(temp_learning_dir):
+    """Test markdown to HTML conversion."""
+    from mystuff.commands.learn import convert_markdown_to_html
+
+    lessons_dir = temp_learning_dir / "lessons"
+    lesson_file = lessons_dir / "test-lesson.md"
+
+    # Create a markdown file with various elements
+    markdown_content = """# Test Lesson
+
+This is a **bold** text and this is *italic*.
+
+## Code Example
+
+```python
+def hello():
+    print("Hello, World!")
+```
+
+## Lists
+
+- Item 1
+- Item 2
+- Item 3
+
+## Table
+
+| Column 1 | Column 2 |
+|----------|----------|
+| Value 1  | Value 2  |
+
+## Blockquote
+
+> This is a quote
+"""
+    lesson_file.write_text(markdown_content)
+
+    # Convert to HTML
+    html_path = convert_markdown_to_html(lesson_file)
+
+    # Verify HTML file was created
+    assert Path(html_path).exists()
+
+    # Read and verify HTML content
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Check for essential HTML elements
+    assert "<!DOCTYPE html>" in html_content
+    assert "<html" in html_content
+    assert "<head>" in html_content
+    assert "<body>" in html_content
+    assert "<style>" in html_content  # CSS styling
+
+    # Check that markdown was converted
+    assert "<h1>" in html_content  # Heading
+    assert "<strong>" in html_content  # Bold
+    assert "<em>" in html_content  # Italic
+    assert "<code>" in html_content  # Code
+    assert "<ul>" in html_content  # List
+    assert "<table>" in html_content  # Table
+    assert "<blockquote>" in html_content  # Blockquote
+
+    # Clean up
+    Path(html_path).unlink()
+
+
+def test_convert_markdown_to_html_with_special_chars(temp_learning_dir):
+    """Test markdown conversion with special characters."""
+    from mystuff.commands.learn import convert_markdown_to_html
+
+    lessons_dir = temp_learning_dir / "lessons"
+    lesson_file = lessons_dir / "special-chars.md"
+
+    # Create markdown with special characters
+    markdown_content = """# Special Characters Test
+
+This has special chars: < > & " '
+
+And unicode: 日本語 🎉 émojis
+"""
+    lesson_file.write_text(markdown_content, encoding="utf-8")
+
+    # Convert to HTML
+    html_path = convert_markdown_to_html(lesson_file)
+
+    # Verify file exists
+    assert Path(html_path).exists()
+
+    # Read content
+    with open(html_path, "r", encoding="utf-8") as f:
+        html_content = f.read()
+
+    # Verify special characters are properly handled
+    assert "日本語" in html_content
+    assert "🎉" in html_content
+    assert "émojis" in html_content
+
+    # Clean up
+    Path(html_path).unlink()
+
+
+def test_web_option_integration(temp_learning_dir, monkeypatch):
+    """Test that web option creates HTML file without actually opening browser."""
+    from mystuff.commands.learn import convert_markdown_to_html
+
+    lessons_dir = temp_learning_dir / "lessons"
+    lesson_file = lessons_dir / "web-test.md"
+
+    markdown_content = """# Web Test
+
+This tests the web option functionality.
+"""
+    lesson_file.write_text(markdown_content)
+
+    # Test conversion
+    html_path = convert_markdown_to_html(lesson_file)
+
+    # Verify HTML was created
+    assert Path(html_path).exists()
+    assert html_path.endswith(".html")
+
+    # Verify it's in temp directory
+    assert "/tmp" in html_path or "temp" in html_path.lower()
+
+    # Clean up
+    Path(html_path).unlink()

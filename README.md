@@ -27,9 +27,10 @@ mystuff link search python    # locate saved links
 
 ## Key features
 
-- **Comprehensive toolkit** – links, journal, meetings, wiki, lists, self‑evals.
+- **Comprehensive toolkit** – links, journal, meetings, wiki, lists, self‑evals, learning materials.
 - **Plain‑text storage** – JSONL / Markdown / YAML; ideal for Git workflows.
 - **Editor integration** – honours `$EDITOR` and `$PAGER`.
+- **Web viewer** – open lessons as beautifully styled HTML in your browser.
 - **fzf support** – interactive selection where available.
 - **Full‑text search** – across every module.
 - **GitHub stars importer** – capture starred repositories as bookmarks.
@@ -65,10 +66,42 @@ pip install -e .
 ├── meeting/2025/standup.md
 ├── wiki/elixir‑patterns.md
 ├── lists/reading.yaml
+├── learning/
+│   ├── lessons/          # your learning materials (markdown)
+│   └── metadata.yaml     # progress tracking
 └── config.yaml
 ```
 
 All data is stored as plain text for transparency and portability.
+
+## Learning Management
+
+The `learn` module helps you track and study educational materials:
+
+```bash
+# List all lessons
+mystuff learn list
+
+# Start a lesson
+mystuff learn start python/01-variables.md
+
+# Open current lesson in web browser (with beautiful HTML styling)
+mystuff learn current --web
+
+# Complete and move to next lesson
+mystuff learn next --web
+
+# View your progress
+mystuff learn stats
+```
+
+The `--web` option converts markdown lessons to beautifully styled HTML with:
+
+- Syntax highlighting for code blocks
+- Responsive design
+- Dark mode support
+- Clean, readable typography
+- 5 theme options: `default`, `minimal`, `github`, `dark`, `notion`
 
 ## Syncing
 
