@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ description }}">
+    <meta name="author" content="{{ author }}">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="site-title">{{ title }}</h1>
+                {% if description %}
+                <p class="site-description">{{ description }}</p>
+                {% endif %}
+            </div>
+            
+            <nav class="sidebar-menu">
+                <ul>
+                {% for item in menu_items %}
+                    <li>
+                        <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {{ item.name }}
+                        </a>
+                    </li>
+                {% endfor %}
+                </ul>
+            </nav>
+        </aside>
+        
+        <main class="content">
+            {% block content %}
+            <div class="welcome">
+                <h1>Welcome</h1>
+                <p>This is your personal knowledge base generated with <strong>mystuff-cli</strong>.</p>
+                
+                <div class="getting-started">
+                    <h2>Getting Started</h2>
+                    <p>To customize this site, edit your <code>~/.mystuff/config.yaml</code>:</p>
+                    <pre><code>generate:
+  web:
+    output: "~/mystuff_web"
+    title: "{{ title }}"
+    description: "{{ description }}"
+    author: "{{ author }}"
+    menu_items:
+      - name: "Home"
+        url: "/"
+      - name: "GitHub"
+        url: "https://github.com/{{ author }}"
+      - name: "Blog"
+        url: "/blog"</code></pre>
+                    
+                    <p>Then regenerate your site:</p>
+                    <pre><code>mystuff generate web</code></pre>
+                </div>
+            </div>
+            {% endblock %}
+        </main>
+    </div>
+</body>
+</html>

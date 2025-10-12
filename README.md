@@ -31,6 +31,7 @@ mystuff link search python    # locate saved links
 - **Plain‑text storage** – JSONL / Markdown / YAML; ideal for Git workflows.
 - **Editor integration** – honours `$EDITOR` and `$PAGER`.
 - **Web viewer** – open lessons as beautifully styled HTML in your browser.
+- **Static site generator** – create elegant portfolio websites from your data.
 - **fzf support** – interactive selection where available.
 - **Full‑text search** – across every module.
 - **GitHub stars importer** – capture starred repositories as bookmarks.
@@ -102,6 +103,46 @@ The `--web` option converts markdown lessons to beautifully styled HTML with:
 - Dark mode support
 - Clean, readable typography
 - 5 theme options: `default`, `minimal`, `github`, `dark`, `notion`
+
+## Static Website Generation
+
+Generate a beautiful static website from your mystuff data:
+
+```bash
+# Generate with default settings
+mystuff generate web
+
+# Generate to specific directory
+mystuff generate web --output ~/my-website
+
+# Preview the generated site
+open ~/my-website/index.html
+```
+
+Configure the website in `~/.mystuff/config.yaml`:
+
+```yaml
+generate:
+  web:
+    output: "~/mystuff_web"
+    title: "My Knowledge Base"
+    description: "Personal knowledge management"
+    author: "Your Name"
+    menu_items:
+      - name: "Home"
+        url: "/"
+      - name: "GitHub"
+        url: "https://github.com/yourusername"
+      - name: "Blog"
+        url: "/blog"
+```
+
+Features:
+- Minimal, elegant design inspired by modern portfolio sites
+- Sidebar navigation with configurable menu items
+- Responsive layout (mobile-friendly)
+- Dark mode support
+- Clean typography and accessible colors
 
 ## Syncing
 
