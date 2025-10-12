@@ -106,7 +106,7 @@ The `--web` option converts markdown lessons to beautifully styled HTML with:
 
 ## Static Website Generation
 
-Generate a beautiful static website from your mystuff data:
+Generate a beautiful static website from your mystuff data with automatic GitHub integration:
 
 ```bash
 # Generate with default settings
@@ -128,21 +128,32 @@ generate:
     title: "My Knowledge Base"
     description: "Personal knowledge management"
     author: "Your Name"
+    github_username: "yourusername"  # Optional: fetch GitHub repos
     menu_items:
-      - name: "Home"
-        url: "/"
       - name: "GitHub"
         url: "https://github.com/yourusername"
       - name: "Blog"
         url: "/blog"
+      - name: "Contact"
+        url: "mailto:your@email.com"
 ```
 
 Features:
-- Minimal, elegant design inspired by modern portfolio sites
-- Sidebar navigation with configurable menu items
-- Responsive layout (mobile-friendly)
-- Dark mode support
-- Clean typography and accessible colors
+- **Elegant jepemo.github.io-inspired design** – Minimal, professional aesthetic
+- **Roboto Mono typography** – Clean, readable monospace font
+- **Dot pattern background** – Subtle visual texture (#F5F5F0 beige)
+- **GitHub integration** – Automatically displays your top 6 starred repositories
+- **Sidebar navigation** – Configurable menu with hover states (#558ad8 blue accent)
+- **Responsive layout** – Mobile-friendly design
+- **No authentication required** – Uses public GitHub API
+- **Graceful fallback** – Works without GitHub username or when rate-limited
+
+The GitHub integration fetches your most popular repositories (sorted by stars) and displays them with:
+- Repository name (clickable link)
+- Description
+- Primary programming language
+
+Example: See [jepemo.github.io](https://jepemo.github.io/) for the visual reference.
 
 ## Syncing
 
