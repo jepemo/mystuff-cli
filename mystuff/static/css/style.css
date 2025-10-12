@@ -1,30 +1,16 @@
-/* CSS Variables */
+/* CSS Variables - jepemo.github.io theme */
 :root {
-  --bg-color: #f9f9f9;
-  --text-color: #333;
-  --text-secondary: #666;
-  --accent-color: #0366d6;
-  --accent-hover: #0256c7;
+  --bg-color: #F5F5F0;
+  --text-color: #222;
+  --text-secondary: #888;
+  --accent-color: #558ad8;
+  --accent-hover: #558ad8;
   --sidebar-bg: #fff;
   --sidebar-width: 280px;
-  --content-max-width: 800px;
-  --border-color: #e1e4e8;
-  --code-bg: #f6f8fa;
+  --content-max-width: 960px;
+  --border-color: #ddd;
+  --code-bg: #F1F1F1;
   --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-}
-
-/* Dark mode support */
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg-color: #0d1117;
-    --text-color: #c9d1d9;
-    --text-secondary: #8b949e;
-    --accent-color: #58a6ff;
-    --accent-hover: #79c0ff;
-    --sidebar-bg: #161b22;
-    --border-color: #30363d;
-    --code-bg: #161b22;
-  }
 }
 
 /* Base styles */
@@ -37,12 +23,16 @@ html {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji";
+  font-family: 'Roboto Mono', Monaco, 'Courier New', monospace;
+  font-size: 1.5rem;
   line-height: 1.6;
   color: var(--text-color);
   background: var(--bg-color);
   margin: 0;
   padding: 0;
+  /* Dot pattern background */
+  background-image: radial-gradient(circle, #ddd 1px, transparent 1px);
+  background-size: 20px 20px;
 }
 
 /* Container layout */
@@ -111,8 +101,8 @@ body {
 }
 
 .sidebar-menu a:hover {
-  background: var(--code-bg);
-  color: var(--accent-color);
+  background: var(--accent-hover);
+  color: white;
 }
 
 .sidebar-menu a:active {
@@ -124,7 +114,8 @@ body {
   flex: 1;
   margin-left: var(--sidebar-width);
   padding: 3rem 2rem;
-  max-width: calc(var(--content-max-width) + 4rem);
+  max-width: var(--content-max-width);
+  background: white;
 }
 
 /* Welcome section */
@@ -202,14 +193,65 @@ pre code {
 
 /* Links */
 a {
-  color: var(--accent-color);
+  color: var(--text-color);
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 a:hover {
-  color: var(--accent-hover);
+  background-color: var(--accent-hover);
+  color: white;
+  text-decoration: none;
+}
+
+/* Open-source section */
+.opensource {
+  max-width: var(--content-max-width);
+}
+
+.opensource h3 {
+  font-size: 1.5rem;
+  font-weight: 400;
   text-decoration: underline;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+  color: var(--text-color);
+}
+
+.opensource h5 {
+  font-size: 1.5rem;
+  font-weight: 400;
+  margin-top: 1rem;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.opensource .repo-item {
+  margin-bottom: 1.5rem;
+}
+
+.opensource .repo-name {
+  font-weight: 400;
+  color: var(--text-color);
+}
+
+.opensource .repo-name:hover {
+  background-color: var(--accent-hover);
+  color: white;
+}
+
+.opensource .repo-description {
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  font-weight: 300;
+}
+
+.opensource .repo-language {
+  color: var(--text-secondary);
+  font-size: 1.5rem;
+  font-weight: 300;
+  font-style: italic;
+  margin: 0.25rem 0 0 0;
 }
 
 /* Responsive design */

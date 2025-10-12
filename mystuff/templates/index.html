@@ -8,18 +8,21 @@
     <title>{{ title }}</title>
     <link rel="stylesheet" href="css/normalize.css">
     <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1 class="site-title">{{ title }}</h1>
+                <h1 class="site-title">@{{ author }}</h1>
                 {% if description %}
                 <p class="site-description">{{ description }}</p>
                 {% endif %}
             </div>
             
+            {% if menu_items %}
             <nav class="sidebar-menu">
+                <h2>Additional Links</h2>
                 <ul>
                 {% for item in menu_items %}
                     <li>
@@ -30,28 +33,48 @@
                 {% endfor %}
                 </ul>
             </nav>
+            {% endif %}
         </aside>
         
         <main class="content">
-            {% block content %}
+            {% if repositories %}
+            <div class="opensource">
+                <h3>Open-source:</h3>
+                
+                {% for repo in repositories %}
+                <div class="repo-item">
+                    <h5>
+                        <a href="{{ repo.url }}" target="_blank" rel="noopener noreferrer" class="repo-name">
+                            {{ repo.name }}
+                        </a>
+                        {% if repo.description %}
+                        - <span class="repo-description">{{ repo.description }}</span>
+                        {% endif %}
+                    </h5>
+                    {% if repo.language %}
+                    <p class="repo-language">{{ repo.language }}</p>
+                    {% endif %}
+                </div>
+                {% endfor %}
+            </div>
+            {% else %}
             <div class="welcome">
                 <h1>Welcome</h1>
                 <p>This is your personal knowledge base generated with <strong>mystuff-cli</strong>.</p>
                 
                 <div class="getting-started">
                     <h2>Getting Started</h2>
-                    <p>To customize this site, edit your <code>~/.mystuff/config.yaml</code>:</p>
+                    <p>To show your GitHub pinned repositories, add your username to <code>~/.mystuff/config.yaml</code>:</p>
                     <pre><code>generate:
   web:
     output: "~/mystuff_web"
     title: "{{ title }}"
     description: "{{ description }}"
     author: "{{ author }}"
+    github_username: "your-github-username"
     menu_items:
-      - name: "Home"
-        url: "/"
       - name: "GitHub"
-        url: "https://github.com/{{ author }}"
+        url: "https://github.com/your-username"
       - name: "Blog"
         url: "/blog"</code></pre>
                     
@@ -59,7 +82,7 @@
                     <pre><code>mystuff generate web</code></pre>
                 </div>
             </div>
-            {% endblock %}
+            {% endif %}
         </main>
     </div>
 </body>
