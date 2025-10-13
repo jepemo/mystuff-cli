@@ -282,6 +282,14 @@ def generate_web(
             help="Output directory for generated files",
         ),
     ] = None,
+    force: Annotated[
+        bool,
+        typer.Option(
+            "--force",
+            "-f",
+            help="Overwrite output directory without asking",
+        ),
+    ] = False,
 ) -> None:
     """Generate a static website from mystuff data.
     
@@ -318,13 +326,14 @@ def generate_web(
     
     # Check if output directory exists and has content
     if output.exists() and any(output.iterdir()):
-        if not typer.confirm(
-            f"\n⚠️  Output directory '{output}' already exists and is not empty.\n"
-            "Do you want to overwrite it?",
-            default=False,
-        ):
-            console.print("\n❌ Generation cancelled.")
-            raise typer.Exit(0)
+        if not force:
+            if not typer.confirm(
+                f"\n⚠️  Output directory '{output}' already exists and is not empty.\n"
+                "Do you want to overwrite it?",
+                default=False,
+            ):
+                console.print("\n❌ Generation cancelled.")
+                raise typer.Exit(0)
     
     # Generate the website
     try:

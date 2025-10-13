@@ -14,7 +14,7 @@
     <div class="container">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <h1 class="site-title">@{{ author }}</h1>
+                <h1 class="site-title"><a href="index.html" class="author-link">@{{ author }}</a></h1>
                 {% if description %}
                 <p class="site-description">{{ description }}</p>
                 {% endif %}
@@ -22,7 +22,6 @@
             
             {% if menu_items %}
             <nav class="sidebar-menu">
-                <h2>Additional Links</h2>
                 <ul>
                 {% for item in menu_items %}
                     <li>
