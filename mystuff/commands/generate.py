@@ -60,6 +60,7 @@ def get_generate_config() -> Dict[str, Any]:
         "description": "Personal knowledge management",
         "author": "Your Name",
         "github_username": None,
+        "repositories": [],  # List of repository names to display
         "menu_items": [
             {"name": "Home", "url": "/", "icon": "home"},
         ],
@@ -73,71 +74,70 @@ def get_generate_config() -> Dict[str, Any]:
     return generate_config
 
 
-def fetch_github_pinned_repos(username: str) -> List[Dict[str, Any]]:
-    """Fetch pinned repositories from GitHub for a given username.
+def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict[str, Any]]:
+    """Fetch details for specific GitHub repositories.
     
-    Uses GitHub's REST API via a public endpoint without authentication.
-    Falls back to fetching the most popular repositories if pinned repos
-    are not available.
+    Uses GitHub's REST API to fetch repository information for the specified
+    repository names. This works without authentication for public repositories.
     
     Args:
         username: GitHub username
+        repo_names: List of repository names to fetch
         
     Returns:
         List of repository dictionaries with name, description, url, and language
     """
-    if not username:
+    if not username or not repo_names:
         return []
     
-    try:
-        # Try to fetch user's repositories (sorted by stars)
-        url = f"https://api.github.com/users/{username}/repos?sort=stars&per_page=6"
-        
-        # Prepare the request
-        headers = {
-            "Accept": "application/vnd.github.v3+json",
-            "User-Agent": "mystuff-cli",
-        }
-        
-        req = urllib.request.Request(url, headers=headers)
-        
-        # Make the request
-        with urllib.request.urlopen(req, timeout=10) as response:
-            repos_data = json.loads(response.read().decode("utf-8"))
+    repos = []
+    
+    for repo_name in repo_names:
+        try:
+            # GitHub REST API endpoint for a specific repository
+            url = f"https://api.github.com/repos/{username}/{repo_name}"
             
-        # Extract repository information
-        repos = []
-        for item in repos_data[:6]:  # Limit to 6 repos
-            # Skip forks if they're not popular
-            if item.get("fork", False) and item.get("stargazers_count", 0) < 5:
-                continue
-                
+            headers = {
+                "Accept": "application/vnd.github.v3+json",
+                "User-Agent": "mystuff-cli",
+            }
+            
+            req = urllib.request.Request(url, headers=headers)
+            
+            # Make the request
+            with urllib.request.urlopen(req, timeout=10) as response:
+                repo_data = json.loads(response.read().decode("utf-8"))
+            
+            # Extract repository information
             repo = {
-                "name": item["name"],
-                "description": item.get("description", ""),
-                "url": item["html_url"],
-                "language": item.get("language")
+                "name": repo_data["name"],
+                "description": repo_data.get("description", ""),
+                "url": repo_data["html_url"],
+                "language": repo_data.get("language")
             }
             repos.append(repo)
-        
-        return repos[:6]  # Return max 6 repos
-        
-    except urllib.error.HTTPError as e:
-        if e.code == 403:
+            
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                console.print(
+                    f"[yellow]⚠️  Warning: Repository '{username}/{repo_name}' not found[/yellow]"
+                )
+            elif e.code == 403:
+                console.print(
+                    f"[yellow]⚠️  Warning: GitHub API rate limit exceeded. "
+                    f"Skipping remaining repositories.[/yellow]"
+                )
+                break
+            else:
+                console.print(
+                    f"[yellow]⚠️  Warning: Could not fetch repo '{repo_name}' (HTTP {e.code})[/yellow]"
+                )
+        except Exception as e:
             console.print(
-                f"[yellow]⚠️  Warning: GitHub API rate limit exceeded. "
-                f"The site will be generated without repository information.[/yellow]"
+                f"[yellow]⚠️  Warning: Could not fetch repo '{repo_name}': {e}[/yellow]"
             )
-        else:
-            console.print(
-                f"[yellow]⚠️  Warning: Could not fetch GitHub repos (HTTP {e.code})[/yellow]"
-            )
-        return []
-    except Exception as e:
-        console.print(
-            f"[yellow]⚠️  Warning: Could not fetch GitHub repos: {e}[/yellow]"
-        )
-        return []
+    
+    return repos
 
 
 def get_templates_dir() -> Path:
@@ -238,13 +238,15 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     console.print("\n📦 Copying static files...")
     copy_static_files(output_dir)
     
-    # Fetch GitHub repositories if username is configured
+    # Fetch GitHub repositories if username and repo list are configured
     repos = []
     github_username = config.get("github_username")
-    if github_username:
-        console.print(f"\n🐙 Fetching pinned repositories for @{github_username}...")
-        repos = fetch_github_pinned_repos(github_username)
-        console.print(f"  ✅ Found {len(repos)} pinned repositories")
+    repo_names = config.get("repositories", [])
+    
+    if github_username and repo_names:
+        console.print(f"\n🐙 Fetching repository details for @{github_username}...")
+        repos = fetch_github_repo_details(github_username, repo_names)
+        console.print(f"  ✅ Found {len(repos)} repositories")
     
     # Prepare context for templates
     context = {
