@@ -115,6 +115,9 @@ mystuff generate web
 # Generate to specific directory
 mystuff generate web --output ~/my-website
 
+# Force overwrite without confirmation
+mystuff generate web --force
+
 # Preview the generated site
 open ~/my-website/index.html
 ```
@@ -128,7 +131,11 @@ generate:
     title: "My Knowledge Base"
     description: "Personal knowledge management"
     author: "Your Name"
-    github_username: "yourusername"  # Optional: fetch GitHub repos
+    github_username: "yourusername" # Required for GitHub integration
+    repositories: # List of repos to display (in order)
+      - "repo-name-1"
+      - "repo-name-2"
+      - "repo-name-3"
     menu_items:
       - name: "GitHub"
         url: "https://github.com/yourusername"
@@ -139,19 +146,24 @@ generate:
 ```
 
 Features:
+
 - **Elegant jepemo.github.io-inspired design** – Minimal, professional aesthetic
 - **Roboto Mono typography** – Clean, readable monospace font
 - **Dot pattern background** – Subtle visual texture (#F5F5F0 beige)
-- **GitHub integration** – Automatically displays your top 6 starred repositories
+- **GitHub integration** – Display your chosen repositories with automatic data fetching
+- **User-controlled repo list** – Specify exactly which repos to show and in what order
 - **Sidebar navigation** – Configurable menu with hover states (#558ad8 blue accent)
 - **Responsive layout** – Mobile-friendly design
-- **No authentication required** – Uses public GitHub API
-- **Graceful fallback** – Works without GitHub username or when rate-limited
+- **No authentication required** – Uses public GitHub REST API
+- **Force mode** – Use `-f` flag to skip overwrite confirmation
 
-The GitHub integration fetches your most popular repositories (sorted by stars) and displays them with:
+The GitHub integration fetches repository details for each repo in your list and displays:
+
 - Repository name (clickable link)
 - Description
 - Primary programming language
+
+Repositories are shown in the exact order you specify in the config.
 
 Example: See [jepemo.github.io](https://jepemo.github.io/) for the visual reference.
 
