@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Links Browser - {{ description }}">
+    <meta name="author" content="{{ author }}">
+    <title>Links - {{ title }}</title>
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        .links-container {
+            padding: 2rem;
+        }
+        
+        .search-box {
+            width: 100%;
+            padding: 1rem;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 1.2rem;
+            border: none;
+            border-bottom: 2px solid var(--border-color);
+            background: transparent;
+            color: var(--text-color);
+            outline: none;
+            margin-bottom: 2rem;
+        }
+        
+        .search-box:focus {
+            border-bottom-color: var(--accent-color);
+        }
+        
+        .tag-cloud {
+            margin: 2rem 0;
+            line-height: 2.5;
+        }
+        
+        .tag {
+            display: inline-block;
+            margin-right: 1rem;
+            margin-bottom: 0.5rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .tag a {
+            text-decoration: none;
+            color: var(--text-color);
+            padding: 0.3rem 0.6rem;
+            border-radius: 4px;
+        }
+        
+        .tag a:hover {
+            background-color: var(--accent-color);
+            color: white;
+        }
+        
+        .results-header {
+            margin: 2rem 0 1rem 0;
+            font-size: 1.2rem;
+            color: var(--text-secondary);
+        }
+        
+        .results-header a {
+            color: var(--accent-color);
+            text-decoration: none;
+        }
+        
+        .results-header a:hover {
+            text-decoration: underline;
+        }
+        
+        .links-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        
+        .link-item {
+            margin-bottom: 1.5rem;
+            padding: 1rem;
+            border-left: 3px solid var(--border-color);
+            transition: all 0.2s ease;
+        }
+        
+        .link-item:hover {
+            border-left-color: var(--accent-color);
+            background: var(--code-bg);
+        }
+        
+        .link-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        
+        .link-title a {
+            color: var(--text-color);
+            text-decoration: none;
+        }
+        
+        .link-title a:hover {
+            color: var(--accent-color);
+        }
+        
+        .link-url {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            font-family: monospace;
+            word-break: break-all;
+            margin-bottom: 0.5rem;
+        }
+        
+        .link-tags {
+            margin-top: 0.5rem;
+        }
+        
+        .link-tag {
+            display: inline-block;
+            background: var(--code-bg);
+            padding: 0.2rem 0.6rem;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+            color: var(--text-secondary);
+        }
+        
+        .no-results {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+            font-size: 1.2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="site-title"><a href="index.html" class="author-link">@{{ author }}</a></h1>
+                {% if description %}
+                <p class="site-description">{{ description }}</p>
+                {% endif %}
+            </div>
+            
+            {% if menu_items %}
+            <nav class="sidebar-menu">
+                <ul>
+                    <li>
+                        <a href="index.html">Home</a>
+                    </li>
+                    <li>
+                        <a href="links.html">Links</a>
+                    </li>
+                {% for item in menu_items %}
+                    <li>
+                        <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {{ item.name }}
+                        </a>
+                    </li>
+                {% endfor %}
+                </ul>
+            </nav>
+            {% endif %}
+        </aside>
+        
+        <main class="content">
+            <div class="links-container">
+                <h1>Links Browser</h1>
+                <input type="text" 
+                       class="search-box" 
+                       id="searchInput" 
+                       placeholder="Search links by title, URL, or tags..."
+                       autocomplete="off">
+                
+                <div class="tag-cloud" id="tagCloud"></div>
+                
+                <div class="results-header" id="resultsHeader" style="display: none;">
+                    <span id="resultsCount"></span>
+                    <a href="#" id="resetButton">Reset</a>
+                </div>
+                
+                <ul class="links-list" id="linksList"></ul>
+                
+                <div class="no-results" id="noResults" style="display: none;">
+                    No links found matching your search.
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Data embedded from mystuff
+        const LINKS_DATA = {{ links_json|safe }};
+        
+        // State
+        let allLinks = [];
+        let filteredLinks = [];
+        let searchTerm = '';
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            allLinks = processLinks(LINKS_DATA);
+            filteredLinks = allLinks;
+            
+            renderTagCloud(allLinks);
+            renderLinks(filteredLinks);
+            
+            // Event listeners
+            document.getElementById('searchInput').addEventListener('input', handleSearch);
+            document.getElementById('resetButton').addEventListener('click', handleReset);
+        });
+        
+        // Process links from JSONL format
+        function processLinks(data) {
+            return data.map((link, index) => ({
+                id: index + 1,
+                url: link.url || '',
+                title: link.title || 'Untitled',
+                tags: link.tags || [],
+                category: link.category || ''
+            }));
+        }
+        
+        // Extract and count tags
+        function getTags(links) {
+            const tagCount = {};
+            
+            links.forEach(link => {
+                (link.tags || []).forEach(tag => {
+                    tagCount[tag] = (tagCount[tag] || 0) + 1;
+                });
+            });
+            
+            return Object.entries(tagCount)
+                .map(([name, count]) => ({ name, count }))
+                .sort((a, b) => b.count - a.count);
+        }
+        
+        // Render tag cloud
+        function renderTagCloud(links) {
+            const tags = getTags(links);
+            const tagCloud = document.getElementById('tagCloud');
+            
+            if (tags.length === 0 || searchTerm) {
+                tagCloud.style.display = 'none';
+                return;
+            }
+            
+            tagCloud.style.display = 'block';
+            
+            // Calculate font sizes
+            const minFont = 15;
+            const maxFont = 40;
+            const minCount = Math.min(...tags.map(t => t.count));
+            const maxCount = Math.max(...tags.map(t => t.count));
+            
+            const maxTags = Math.min(30, tags.length);
+            
+            tagCloud.innerHTML = tags.slice(0, maxTags).map(tag => {
+                const size = maxCount > minCount
+                    ? ((maxFont - minFont) * ((tag.count - minCount) / (maxCount - minCount))) + minFont
+                    : minFont;
+                
+                return `
+                    <span class="tag">
+                        <a href="#" 
+                           style="font-size: ${size}px" 
+                           data-tag="${tag.name}"
+                           onclick="handleTagClick(event, '${tag.name}')">
+                            ${tag.name}
+                        </a>
+                    </span>
+                `;
+            }).join('');
+        }
+        
+        // Handle search input
+        function handleSearch(event) {
+            searchTerm = event.target.value.toLowerCase().trim();
+            
+            if (searchTerm) {
+                filteredLinks = allLinks.filter(link => {
+                    return link.title.toLowerCase().includes(searchTerm) ||
+                           link.url.toLowerCase().includes(searchTerm) ||
+                           (link.tags || []).some(tag => tag.toLowerCase().includes(searchTerm));
+                });
+            } else {
+                filteredLinks = allLinks;
+            }
+            
+            renderTagCloud(allLinks);
+            renderLinks(filteredLinks);
+            updateResultsHeader();
+        }
+        
+        // Handle tag click
+        function handleTagClick(event, tagName) {
+            event.preventDefault();
+            document.getElementById('searchInput').value = tagName;
+            searchTerm = tagName.toLowerCase();
+            
+            filteredLinks = allLinks.filter(link =>
+                (link.tags || []).some(tag => tag.toLowerCase() === searchTerm)
+            );
+            
+            renderTagCloud(allLinks);
+            renderLinks(filteredLinks);
+            updateResultsHeader();
+        }
+        
+        // Handle reset
+        function handleReset(event) {
+            event.preventDefault();
+            document.getElementById('searchInput').value = '';
+            searchTerm = '';
+            filteredLinks = allLinks;
+            
+            renderTagCloud(allLinks);
+            renderLinks(filteredLinks);
+            updateResultsHeader();
+        }
+        
+        // Update results header
+        function updateResultsHeader() {
+            const resultsHeader = document.getElementById('resultsHeader');
+            const resultsCount = document.getElementById('resultsCount');
+            
+            if (searchTerm) {
+                resultsHeader.style.display = 'block';
+                resultsCount.textContent = `${filteredLinks.length} result${filteredLinks.length !== 1 ? 's' : ''}`;
+            } else {
+                resultsHeader.style.display = 'none';
+            }
+        }
+        
+        // Render links list
+        function renderLinks(links) {
+            const linksList = document.getElementById('linksList');
+            const noResults = document.getElementById('noResults');
+            
+            if (links.length === 0) {
+                linksList.style.display = 'none';
+                noResults.style.display = 'block';
+                return;
+            }
+            
+            linksList.style.display = 'block';
+            noResults.style.display = 'none';
+            
+            linksList.innerHTML = links.map(link => `
+                <li class="link-item">
+                    <div class="link-title">
+                        <a href="${link.url}" target="_blank" rel="noopener noreferrer">
+                            ${escapeHtml(link.title)}
+                        </a>
+                    </div>
+                    <div class="link-url">${escapeHtml(link.url)}</div>
+                    ${link.tags && link.tags.length > 0 ? `
+                        <div class="link-tags">
+                            ${link.tags.map(tag => `<span class="link-tag">${escapeHtml(tag)}</span>`).join('')}
+                        </div>
+                    ` : ''}
+                </li>
+            `).join('');
+        }
+        
+        // Escape HTML
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

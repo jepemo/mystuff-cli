@@ -23,6 +23,9 @@
             {% if menu_items %}
             <nav class="sidebar-menu">
                 <ul>
+                    <li>
+                        <a href="links.html">Links</a>
+                    </li>
                 {% for item in menu_items %}
                     <li>
                         <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>

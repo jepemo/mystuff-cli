@@ -140,6 +140,37 @@ def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict
     return repos
 
 
+def load_mystuff_links() -> List[Dict[str, Any]]:
+    """Load links from mystuff links.jsonl file."""
+    mystuff_dir = get_mystuff_dir()
+    links_file = mystuff_dir / "links.jsonl"
+    
+    if not links_file.exists():
+        console.print(
+            "[yellow]⚠️  Warning: links.jsonl not found, links page will be empty[/yellow]"
+        )
+        return []
+    
+    links = []
+    try:
+        with open(links_file, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if line:
+                    try:
+                        link = json.loads(line)
+                        links.append(link)
+                    except json.JSONDecodeError:
+                        continue
+    except Exception as e:
+        console.print(
+            f"[yellow]⚠️  Warning: Could not read links file: {e}[/yellow]"
+        )
+        return []
+    
+    return links
+
+
 def get_templates_dir() -> Path:
     """Get the templates directory path."""
     # Templates are bundled with the package
@@ -248,6 +279,11 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         repos = fetch_github_repo_details(github_username, repo_names)
         console.print(f"  ✅ Found {len(repos)} repositories")
     
+    # Load links from mystuff
+    console.print("\n📚 Loading links...")
+    links = load_mystuff_links()
+    console.print(f"  ✅ Loaded {len(links)} links")
+    
     # Prepare context for templates
     context = {
         "title": config.get("title", "My Knowledge Base"),
@@ -256,11 +292,21 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         "menu_items": config.get("menu_items", []),
         "github_username": github_username,
         "repositories": repos,
+        "links_json": json.dumps(links),
     }
     
     # Generate index.html
     console.print("\n📝 Generating HTML pages...")
     render_template("index.html", context, output_dir / "index.html")
+    
+    # Generate links.html (if template exists)
+    links_template = get_templates_dir() / "links.html"
+    if links_template.exists():
+        render_template("links.html", context, output_dir / "links.html")
+    else:
+        console.print(
+            "[yellow]  ⚠️  Skipping links.html (template not found)[/yellow]"
+        )
     
     console.print("\n✨ Website generation complete!")
     console.print(f"\n🌐 Open {output_dir / 'index.html'} in your browser\n")
