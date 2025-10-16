@@ -484,6 +484,12 @@ def copy_static_files(output_dir: Path) -> None:
         for js_file in js_src.glob("*.js"):
             shutil.copy2(js_file, js_dest)
             console.print(f"  📄 Copied {js_file.name}")
+    
+    # Copy favicon if it exists
+    favicon_src = static_dir / "favicon.ico"
+    if favicon_src.exists():
+        shutil.copy2(favicon_src, output_dir / "favicon.ico")
+        console.print(f"  📄 Copied favicon.ico")
 
 
 def render_template(
