@@ -99,6 +99,34 @@ def extract_lesson_title(lesson_content: str) -> Optional[str]:
         return topic
 
 
+def extract_lesson_topic(lesson_content: str) -> Optional[str]:
+    """
+    Extract only the topic from markdown content.
+    
+    Expected format in the markdown:
+        # Topic: Topic Name
+    
+    Args:
+        lesson_content: The markdown content of the lesson
+        
+    Returns:
+        Topic name or None if not found
+    """
+    import re
+    
+    lines = lesson_content.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        
+        # Match "# Topic: Topic Name"
+        topic_match = re.match(r'^#\s+Topic:\s*(.+)$', line, re.IGNORECASE)
+        if topic_match:
+            return topic_match.group(1).strip()
+    
+    return None
+
+
 def extract_frontmatter(content: str) -> tuple[Optional[Dict[str, Any]], str]:
     """
     Extract YAML frontmatter from markdown content.
@@ -383,6 +411,7 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
         
         # Extract title from file and check Reviewed attribute
         title = None
+        topic = None
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -405,8 +434,9 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
                 # If reviewed exists and is true, include it
                 # If reviewed doesn't exist, include it (default behavior)
             
-            # Extract title from content (after frontmatter removal)
+            # Extract title and topic from content (after frontmatter removal)
             title = extract_lesson_title(content_without_frontmatter)
+            topic = extract_lesson_topic(content_without_frontmatter)
             
         except Exception:
             pass
@@ -427,6 +457,7 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
             "path": str(rel_path),
             "filename": file_path.name,
             "url": lesson_url,
+            "topic": topic,  # Add topic field
         })
     
     # Sort by path (preserves directory structure order: 01/01/01.md, 01/01/02.md, etc.)
@@ -695,9 +726,17 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     # Generate learning.html (if template exists)
     learning_template = get_templates_dir() / "learning.html"
     if learning_template.exists() and all_lessons:
+        # Extract unique topics and sort them alphabetically
+        topics = set()
+        for lesson in all_lessons:
+            if lesson.get("topic"):
+                topics.add(lesson["topic"])
+        sorted_topics = sorted(topics)
+        
         lessons_context = context.copy()
         lessons_context["lessons"] = all_lessons
         lessons_context["lessons_json"] = json.dumps(all_lessons)
+        lessons_context["topics"] = sorted_topics
         render_template("learning.html", lessons_context, output_dir / "learning.html")
         
         # Generate individual lesson pages
