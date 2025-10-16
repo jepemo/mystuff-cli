@@ -35,14 +35,6 @@
           <option value="done">Done</option>
           <option value="todo">To Do</option>
         </select>
-
-        <label for="topic-filter">Topic:</label>
-        <select id="topic-filter" name="topic-filter">
-          <option value="all">All Topics</option>
-          {% for topic in topics %}
-          <option value="{{ topic }}">{{ topic }}</option>
-          {% endfor %}
-        </select>
       </form>
 
       {% if lessons %}
@@ -72,17 +64,14 @@
       document.addEventListener("DOMContentLoaded", function () {
         const searchInput = document.getElementById("search");
         const filterSelect = document.getElementById("filter");
-        const topicFilterSelect = document.getElementById("topic-filter");
         const lessonItems = document.querySelectorAll("main ul li");
 
         function filterLessons() {
           const searchTerm = searchInput.value.toLowerCase();
           const filterValue = filterSelect.value;
-          const topicFilterValue = topicFilterSelect.value;
 
           lessonItems.forEach(function (item) {
             const text = item.textContent.toLowerCase();
-            const itemTopic = item.getAttribute("data-topic") || "";
             const itemStatus = item.getAttribute("data-status") || "";
             
             const matchesSearch = text.includes(searchTerm);
@@ -91,13 +80,8 @@
             if (filterValue !== "all") {
               matchesFilter = itemStatus === filterValue;
             }
-            
-            let matchesTopic = true;
-            if (topicFilterValue !== "all") {
-              matchesTopic = itemTopic === topicFilterValue;
-            }
 
-            if (matchesSearch && matchesFilter && matchesTopic) {
+            if (matchesSearch && matchesFilter) {
               item.style.display = "list-item";
             } else {
               item.style.display = "none";
@@ -107,7 +91,6 @@
 
         searchInput.addEventListener("input", filterLessons);
         filterSelect.addEventListener("change", filterLessons);
-        topicFilterSelect.addEventListener("change", filterLessons);
       });
     </script>
   </body>

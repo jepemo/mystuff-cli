@@ -726,17 +726,9 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     # Generate learning.html (if template exists)
     learning_template = get_templates_dir() / "learning.html"
     if learning_template.exists() and all_lessons:
-        # Extract unique topics and sort them alphabetically
-        topics = set()
-        for lesson in all_lessons:
-            if lesson.get("topic"):
-                topics.add(lesson["topic"])
-        sorted_topics = sorted(topics)
-        
         lessons_context = context.copy()
         lessons_context["lessons"] = all_lessons
         lessons_context["lessons_json"] = json.dumps(all_lessons)
-        lessons_context["topics"] = sorted_topics
         render_template("learning.html", lessons_context, output_dir / "learning.html")
         
         # Generate individual lesson pages
