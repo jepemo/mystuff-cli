@@ -1,320 +1,164 @@
-/* CSS Variables - jepemo.github.io theme */
-:root {
-  --bg-color: #f5f5f0;
-  --text-color: #222;
-  --text-secondary: #888;
-  --accent-color: #558ad8;
-  --accent-hover: #558ad8;
-  --sidebar-bg: #fff;
-  --sidebar-width: 280px;
-  --content-max-width: 960px;
-  --border-color: #ddd;
-  --code-bg: #f1f1f1;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.24);
-}
+/* Brutalist Web Design CSS - Raw content true to its construction */
 
-/* Base styles */
+/* Reset and base styles */
 * {
   box-sizing: border-box;
 }
 
-html {
-  font-size: 16px;
-}
-
 body {
-  font-family: "Roboto Mono", Monaco, "Courier New", monospace;
-  font-size: 1.5rem;
-  line-height: 1.6;
-  color: var(--text-color);
-  background: var(--bg-color);
-  margin: 0;
-  padding: 0;
-  /* Dot pattern background */
-  background-image: radial-gradient(circle, #ddd 1px, transparent 1px);
-  background-size: 20px 20px;
-}
-
-/* Container layout */
-.container {
-  display: flex;
-  min-height: 100vh;
-}
-
-/* Sidebar */
-.sidebar {
-  width: var(--sidebar-width);
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--border-color);
-  padding: 2rem 1.5rem;
-  position: fixed;
-  height: 100vh;
-  overflow-y: auto;
-  left: 0;
-  top: 0;
-}
-
-.sidebar-header {
-  margin-bottom: 2rem;
-  padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.site-title {
-  font-size: 1.5rem;
-  font-weight: 700;
-  margin: 0 0 0.5rem 0;
-  color: var(--text-color);
-  line-height: 1.2;
-}
-
-.site-title .author-link {
-  color: var(--text-color);
-  text-decoration: none;
-  transition: all 0.2s ease;
-}
-
-.site-title .author-link:hover {
-  background-color: var(--accent-hover);
-  color: white;
-  padding: 0.2rem 0.4rem;
-  border-radius: 4px;
-}
-
-.site-description {
-  font-size: 0.875rem;
-  color: var(--text-secondary);
-  margin: 0;
+  font-family: serif;
+  font-size: 16px;
   line-height: 1.5;
-}
-
-/* Sidebar menu */
-.sidebar-menu {
-  margin-top: 1.5rem;
-}
-
-.sidebar-menu ul {
-  list-style: none;
-  padding: 0;
+  color: black;
+  background-color: white;
   margin: 0;
+  padding: 20px;
+  max-width: none;
 }
 
-.sidebar-menu li {
-  margin-bottom: 0.5rem;
-}
-
-.sidebar-menu a {
-  display: block;
-  padding: 0.5rem 0.75rem;
-  color: var(--text-color);
-  text-decoration: none;
-  border-radius: 6px;
-  transition: all 0.2s ease;
-  font-size: 0.9375rem;
-}
-
-.sidebar-menu a:hover {
-  background: var(--accent-hover);
-  color: white;
-}
-
-.sidebar-menu a:active {
-  transform: translateY(1px);
-}
-
-/* Main content */
-.content {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  padding: 3rem 2rem;
-  max-width: var(--content-max-width);
-  background: white;
-}
-
-/* Welcome section */
-.welcome {
-  max-width: var(--content-max-width);
-}
-
-.welcome h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  margin: 0 0 1rem 0;
-  color: var(--text-color);
+/* Typography - Stay true to system fonts */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: sans-serif;
+  font-weight: bold;
+  margin: 1em 0 0.5em 0;
   line-height: 1.2;
 }
 
-.welcome h2 {
-  font-size: 1.75rem;
-  font-weight: 600;
-  margin: 2rem 0 1rem 0;
-  color: var(--text-color);
-}
-
-.welcome p {
-  font-size: 1rem;
-  line-height: 1.7;
-  margin: 1rem 0;
-  color: var(--text-secondary);
-}
-
-.welcome strong {
-  color: var(--text-color);
-  font-weight: 600;
-}
-
-/* Getting started section */
-.getting-started {
-  margin-top: 3rem;
-  padding: 2rem;
-  background: var(--sidebar-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: var(--shadow);
-}
-
-.getting-started h2 {
+h1 {
+  font-size: 2em;
   margin-top: 0;
 }
 
-/* Code blocks */
-code {
-  font-family: "SF Mono", Monaco, "Cascadia Code", "Roboto Mono", Consolas,
-    "Courier New", monospace;
-  font-size: 0.875em;
-  background: var(--code-bg);
-  padding: 0.2em 0.4em;
-  border-radius: 3px;
-  color: var(--text-color);
+h2 {
+  font-size: 1.5em;
 }
 
-pre {
-  background: var(--code-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 6px;
-  padding: 1rem;
-  overflow-x: auto;
-  margin: 1rem 0;
+h3 {
+  font-size: 1.2em;
 }
 
-pre code {
-  background: transparent;
-  padding: 0;
-  border-radius: 0;
-  font-size: 0.875rem;
-  line-height: 1.5;
-}
-
-/* Links */
+/* Links must be underlined - brutalist principle */
 a {
-  color: var(--text-color);
-  text-decoration: none;
-  transition: all 0.2s ease;
+  color: blue;
+  text-decoration: underline;
+}
+
+a:visited {
+  color: purple;
 }
 
 a:hover {
-  background-color: var(--accent-hover);
+  color: red;
+}
+
+/* Lists */
+ul,
+ol {
+  margin: 1em 0;
+  padding-left: 2em;
+}
+
+li {
+  margin: 0.5em 0;
+}
+
+/* Navigation */
+nav {
+  margin: 1em 0;
+  padding: 1em 0;
+  border-bottom: 1px solid black;
+}
+
+/* Forms and buttons - must look like buttons */
+button,
+input[type="submit"],
+input[type="button"] {
+  font-family: sans-serif;
+  font-size: 1em;
+  padding: 0.5em 1em;
+  border: 2px solid black;
+  background-color: white;
+  cursor: pointer;
+}
+
+button:hover,
+input[type="submit"]:hover,
+input[type="button"]:hover {
+  background-color: black;
   color: white;
-  text-decoration: none;
 }
 
-/* Open-source section */
-.opensource {
-  max-width: var(--content-max-width);
+input[type="text"],
+input[type="email"],
+input[type="search"],
+textarea {
+  font-family: sans-serif;
+  font-size: 1em;
+  padding: 0.5em;
+  border: 1px solid black;
+  background-color: white;
 }
 
-.opensource h3 {
-  font-size: 1.5rem;
-  font-weight: 400;
-  text-decoration: underline;
-  margin-top: 0;
-  margin-bottom: 1.5rem;
-  color: var(--text-color);
+/* Pre-formatted text */
+pre,
+code {
+  font-family: monospace;
+  background-color: #f0f0f0;
+  padding: 0.2em;
 }
 
-.opensource h5 {
-  font-size: 1.5rem;
-  font-weight: 400;
-  margin-top: 1rem;
-  margin-bottom: 0.5rem;
-  line-height: 1.4;
+pre {
+  padding: 1em;
+  overflow-x: auto;
+  border: 1px solid black;
 }
 
-.opensource .repo-item {
-  margin-bottom: 1.5rem;
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1em 0;
 }
 
-.opensource .repo-name {
-  font-weight: 400;
-  color: var(--text-color);
+th,
+td {
+  border: 1px solid black;
+  padding: 0.5em;
+  text-align: left;
 }
 
-.opensource .repo-name:hover {
-  background-color: var(--accent-hover);
-  color: white;
+th {
+  background-color: #f0f0f0;
+  font-weight: bold;
 }
 
-.opensource .repo-description {
-  color: var(--text-secondary);
-  font-size: 1.5rem;
-  font-weight: 300;
+/* Main content */
+main {
+  margin: 2em 0;
 }
 
-.opensource .repo-language {
-  color: var(--text-secondary);
-  font-size: 1.5rem;
-  font-weight: 300;
-  font-style: italic;
-  margin: 0.25rem 0 0 0;
-}
-
-/* Responsive design */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 100%;
-    position: relative;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border-color);
+/* Responsive design - content readable on all screens */
+@media (max-width: 600px) {
+  body {
+    padding: 10px;
   }
 
-  .content {
-    margin-left: 0;
-    padding: 2rem 1rem;
+  h1 {
+    font-size: 1.5em;
   }
 
-  .container {
-    flex-direction: column;
+  h2 {
+    font-size: 1.2em;
   }
 }
 
-/* Scrollbar styling (webkit browsers) */
-::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
-}
-
-::-webkit-scrollbar-track {
-  background: var(--bg-color);
-}
-
-::-webkit-scrollbar-thumb {
-  background: var(--border-color);
-  border-radius: 4px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-secondary);
-}
-
-/* Print styles */
-@media print {
-  .sidebar {
-    display: none;
-  }
-
-  .content {
-    margin-left: 0;
-    max-width: 100%;
-  }
-}
+/* No unnecessary decoration */
+/* No animations */
+/* No custom fonts beyond system defaults */
+/* No complex layouts */
+/* Raw content, true to its construction */

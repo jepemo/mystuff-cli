@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ description }}">
+    <meta name="author" content="{{ author }}">
+    <title>Learning - {{ title }}</title>
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="site-title"><a href="index.html" class="author-link">@{{ author }}</a></h1>
+                {% if description %}
+                <p class="site-description">{{ description }}</p>
+                {% endif %}
+            </div>
+            
+            {% if menu_items %}
+            <nav class="sidebar-menu">
+                <ul>
+                    <li>
+                        <a href="learning.html" class="active">Learning</a>
+                    </li>
+                    <li>
+                        <a href="links.html">Links</a>
+                    </li>
+                {% for item in menu_items %}
+                    <li>
+                        <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {{ item.name }}
+                        </a>
+                    </li>
+                {% endfor %}
+                </ul>
+            </nav>
+            {% endif %}
+        </aside>
+        
+        <main class="content learning-page">
+            <div class="page-header">
+                <h1>Learning</h1>
+                <p class="page-subtitle">Track your learning progress</p>
+            </div>
+
+            <!-- Search box -->
+            <div class="search-container">
+                <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="search-input" 
+                    placeholder="Search lessons by title..."
+                    autocomplete="off"
+                />
+            </div>
+
+            <!-- Filters -->
+            <div class="filters-container">
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn active" data-filter="current">Current</button>
+                <button class="filter-btn" data-filter="done">Done</button>
+            </div>
+
+            <!-- Lessons list -->
+            <div class="lessons-list">
+                {% for lesson in lessons %}
+                <div class="lesson-item" 
+                     data-status="{{ lesson.status }}" 
+                     data-title="{{ lesson.title }}"
+                     data-name="{{ lesson.name }}">
+                    <a href="lessons/{{ lesson.path|replace('.md', '.html') }}" class="lesson-link">
+                        <span class="lesson-status lesson-status-{{ lesson.status }}"></span>
+                        <span class="lesson-title">{{ lesson.title }}</span>
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="no-results" style="display: none;">
+                <p>No lessons found matching your search and filters.</p>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // Embed lessons data
+        const lessons = {{ lessons_json|safe }};
+
+        // Filter state
+        let activeFilters = new Set(['all', 'current']);
+        let searchQuery = '';
+
+        // DOM elements
+        const searchInput = document.getElementById('searchInput');
+        const filterButtons = document.querySelectorAll('.filter-btn');
+        const lessonItems = document.querySelectorAll('.lesson-item');
+        const noResults = document.querySelector('.no-results');
+
+        // Search handler
+        searchInput.addEventListener('input', (e) => {
+            searchQuery = e.target.value.toLowerCase();
+            filterLessons();
+        });
+
+        // Filter button handler
+        filterButtons.forEach(button => {
+            button.addEventListener('click', () => {
+                const filter = button.dataset.filter;
+                
+                if (filter === 'all') {
+                    // Toggle all filter
+                    if (activeFilters.has('all')) {
+                        activeFilters.delete('all');
+                        button.classList.remove('active');
+                    } else {
+                        activeFilters.add('all');
+                        button.classList.add('active');
+                    }
+                } else {
+                    // Toggle specific filter
+                    if (activeFilters.has(filter)) {
+                        activeFilters.delete(filter);
+                        button.classList.remove('active');
+                    } else {
+                        activeFilters.add(filter);
+                        button.classList.add('active');
+                    }
+                }
+                
+                filterLessons();
+            });
+        });
+
+        // Filter lessons based on search and filters
+        function filterLessons() {
+            let visibleCount = 0;
+            
+            lessonItems.forEach(item => {
+                const status = item.dataset.status;
+                const title = item.dataset.title.toLowerCase();
+                
+                // Check search match
+                const matchesSearch = searchQuery === '' || title.includes(searchQuery);
+                
+                // Check filter match
+                let matchesFilter = false;
+                if (activeFilters.has('all')) {
+                    matchesFilter = true;
+                } else {
+                    if (activeFilters.has('current') && status === 'current') matchesFilter = true;
+                    if (activeFilters.has('done') && status === 'done') matchesFilter = true;
+                    if (activeFilters.has('todo') && status === 'todo') matchesFilter = true;
+                }
+                
+                // Show/hide item
+                if (matchesSearch && matchesFilter) {
+                    item.style.display = '';
+                    visibleCount++;
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+            
+            // Show/hide no results message
+            if (visibleCount === 0) {
+                noResults.style.display = 'block';
+            } else {
+                noResults.style.display = 'none';
+            }
+        }
+
+        // Initialize filters on load
+        filterLessons();
+    </script>
+</body>
+</html>

@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ description }}">
+    <meta name="author" content="{{ author }}">
+    <title>{{ lesson_title }} - {{ title }}</title>
+    <link rel="stylesheet" href="{{ relative_root }}css/normalize.css">
+    <link rel="stylesheet" href="{{ relative_root }}css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1 class="site-title"><a href="{{ relative_root }}index.html" class="author-link">@{{ author }}</a></h1>
+                {% if description %}
+                <p class="site-description">{{ description }}</p>
+                {% endif %}
+            </div>
+            
+            {% if menu_items %}
+            <nav class="sidebar-menu">
+                <ul>
+                    <li>
+                        <a href="{{ relative_root }}learning.html">Learning</a>
+                    </li>
+                    <li>
+                        <a href="{{ relative_root }}links.html">Links</a>
+                    </li>
+                {% for item in menu_items %}
+                    <li>
+                        <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>
+                            {{ item.name }}
+                        </a>
+                    </li>
+                {% endfor %}
+                </ul>
+            </nav>
+            {% endif %}
+        </aside>
+        
+        <main class="content lesson-page">
+            <!-- Breadcrumb -->
+            <div class="breadcrumb">
+                <a href="{{ relative_root }}learning.html">← Back to Learning</a>
+            </div>
+
+            <!-- Lesson content -->
+            <div class="lesson-content">
+                {{ lesson_html|safe }}
+            </div>
+
+            <!-- Navigation -->
+            <div class="lesson-navigation">
+                {% if prev_lesson %}
+                <a href="{{ prev_lesson.path|replace('.md', '.html') }}" class="nav-btn nav-prev">
+                    <span class="nav-label">← Previous</span>
+                    <span class="nav-title">{{ prev_lesson.title }}</span>
+                </a>
+                {% else %}
+                <div class="nav-btn nav-disabled">
+                    <span class="nav-label">← Previous</span>
+                </div>
+                {% endif %}
+
+                {% if next_lesson %}
+                <a href="{{ next_lesson.path|replace('.md', '.html') }}" class="nav-btn nav-next">
+                    <span class="nav-label">Next →</span>
+                    <span class="nav-title">{{ next_lesson.title }}</span>
+                </a>
+                {% else %}
+                <div class="nav-btn nav-disabled">
+                    <span class="nav-label">Next →</span>
+                </div>
+                {% endif %}
+            </div>
+        </main>
+    </div>
+</body>
+</html>

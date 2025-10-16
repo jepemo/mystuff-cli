@@ -178,6 +178,38 @@ def test_get_all_lessons_empty_directory(temp_learning_dir):
     assert lessons == []
 
 
+def test_get_all_lessons_filters_non_numeric_files(temp_learning_dir):
+    """Test that only numeric-formatted files are included."""
+    lessons_dir = temp_learning_dir / "lessons"
+    
+    # Create numeric lessons (should be included)
+    (lessons_dir / "01-intro.md").write_text("# Introduction")
+    (lessons_dir / "02-basics.md").write_text("# Basics")
+    (lessons_dir / "123-advanced.md").write_text("# Advanced")
+    
+    # Create non-numeric files (should be excluded)
+    (lessons_dir / "README.md").write_text("# README")
+    (lessons_dir / "notes.md").write_text("# Notes")
+    (lessons_dir / "index.md").write_text("# Index")
+    (lessons_dir / "documentation.md").write_text("# Docs")
+    
+    # Test flat structure
+    lessons = get_all_lessons(recursive=False)
+    
+    # Should only get numeric files
+    assert len(lessons) == 3
+    lesson_names = [l["name"] for l in lessons]
+    assert "01-intro.md" in lesson_names
+    assert "02-basics.md" in lesson_names
+    assert "123-advanced.md" in lesson_names
+    
+    # Non-numeric files should not be included
+    assert "README.md" not in lesson_names
+    assert "notes.md" not in lesson_names
+    assert "index.md" not in lesson_names
+    assert "documentation.md" not in lesson_names
+
+
 def test_get_next_lesson(sample_lessons, temp_learning_dir):
     """Test getting the next uncompleted lesson."""
     metadata = {
@@ -295,12 +327,12 @@ def test_nested_directory_structure(temp_learning_dir):
     # Create deeply nested structure
     deep_dir = lessons_dir / "level1" / "level2" / "level3"
     deep_dir.mkdir(parents=True)
-    (deep_dir / "deep-lesson.md").write_text("# Deep Lesson")
+    (deep_dir / "01-deep-lesson.md").write_text("# Deep Lesson")
 
     lessons = get_all_lessons(recursive=True)
 
     assert len(lessons) == 1
-    assert lessons[0]["name"] == "level1/level2/level3/deep-lesson.md"
+    assert lessons[0]["name"] == "level1/level2/level3/01-deep-lesson.md"
 
 
 def test_convert_markdown_to_html(temp_learning_dir):

@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="{{ description }}">
+    <meta name="author" content="{{ author }}">
+    <title>{{ title }}</title>
+    <link rel="stylesheet" href="css/normalize.css">
+    <link rel="stylesheet" href="css/style.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Top navigation header -->
+    <header class="header">
+        <div class="header-content">
+            <h1 class="site-title">
+                <a href="index.html">@{{ author }}</a>
+            </h1>
+            <nav>
+                <ul class="nav-menu">
+                    <li><a href="learning.html">Learning</a></li>
+                    <li><a href="links.html">Links</a></li>
+                    {% for item in menu_items %}
+                    <li><a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>{{ item.name }}</a></li>
+                    {% endfor %}
+                </ul>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main content container -->
+    <div class="main-container">
+        <main class="content">
+            {% if learning %}
+            <!-- Learning section -->
+            <div class="learning">
+                <h3>Learning:</h3>
+                <div class="learning-item">
+                    <p class="current-lesson">
+                        <span class="lesson-label">Current lesson:</span>
+                        <a href="{{ learning.url }}" class="lesson-title-link">{{ learning.title }}</a>
+                    </p>
+                </div>
+            </div>
+            {% endif %}
+
+            {% if repositories %}
+            <!-- Open-source section -->
+            <div class="opensource">
+                <h3>Open-source:</h3>
+                <div class="repo-list">
+                    {% for repo in repositories %}
+                    <div class="repo-item">
+                        <h5 class="repo-name">
+                            <a href="{{ repo.url }}" target="_blank" rel="noopener noreferrer">
+                                {{ repo.name }}
+                            </a>
+                            {% if repo.description %}
+                            - <span class="repo-description">{{ repo.description }}</span>
+                            {% endif %}
+                        </h5>
+                        {% if repo.language %}
+                        <p class="repo-language">{{ repo.language }}</p>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% else %}
+            <!-- Welcome section when no repos configured -->
+            <div class="welcome">
+                <h1>Welcome</h1>
+                <p>This is your personal knowledge base generated with <strong>mystuff-cli</strong>.</p>
+                
+                <div class="getting-started">
+                    <h2>Getting Started</h2>
+                    <p>To show your GitHub pinned repositories, add your username to <code>~/.mystuff/config.yaml</code>:</p>
+                    <pre><code>generate:
+  web:
+    output: "~/mystuff_web"
+    title: "{{ title }}"
+    description: "{{ description }}"
+    author: "{{ author }}"
+    github_username: "your-github-username"
+    menu_items:
+      - name: "GitHub"
+        url: "https://github.com/your-username"
+      - name: "Blog"
+        url: "/blog"</code></pre>
+                    
+                    <p>Then regenerate your site:</p>
+                    <pre><code>mystuff generate web</code></pre>
+                </div>
+            </div>
+            {% endif %}
+        </main>
+    </div>
+</body>
+</html>

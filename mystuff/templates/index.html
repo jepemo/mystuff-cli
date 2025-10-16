@@ -3,71 +3,45 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="{{ description }}">
-    <meta name="author" content="{{ author }}">
-    <title>{{ title }}</title>
-    <link rel="stylesheet" href="css/normalize.css">
+    <title>@{{ author }}</title>
     <link rel="stylesheet" href="css/style.css">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@300;400;600;700&display=swap" rel="stylesheet">
 </head>
 <body>
-    <div class="container">
-        <aside class="sidebar">
-            <div class="sidebar-header">
-                <h1 class="site-title"><a href="index.html" class="author-link">@{{ author }}</a></h1>
-                {% if description %}
-                <p class="site-description">{{ description }}</p>
-                {% endif %}
-            </div>
-            
-            {% if menu_items %}
-            <nav class="sidebar-menu">
-                <ul>
-                    <li>
-                        <a href="links.html">Links</a>
-                    </li>
-                {% for item in menu_items %}
-                    <li>
-                        <a href="{{ item.url }}" {% if item.url.startswith('http') %}target="_blank" rel="noopener noreferrer"{% endif %}>
-                            {{ item.name }}
-                        </a>
-                    </li>
-                {% endfor %}
-                </ul>
-            </nav>
-            {% endif %}
-        </aside>
+    <h1>@{{ author }}</h1>
+    
+    <nav>
+        <a href="index.html">Home</a> | 
+        <a href="learning.html">Learning</a> | 
+        <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} | 
+        <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
+    </nav>
+    
+    <main>
+        <p>{{ description }}</p>
         
-        <main class="content">
-            {% if repositories %}
-            <div class="opensource">
-                <h3>Open-source:</h3>
-                
-                {% for repo in repositories %}
-                <div class="repo-item">
-                    <h5>
-                        <a href="{{ repo.url }}" target="_blank" rel="noopener noreferrer" class="repo-name">
-                            {{ repo.name }}
-                        </a>
-                        {% if repo.description %}
-                        - <span class="repo-description">{{ repo.description }}</span>
-                        {% endif %}
-                    </h5>
-                    {% if repo.language %}
-                    <p class="repo-language">{{ repo.language }}</p>
-                    {% endif %}
-                </div>
-                {% endfor %}
-            </div>
-            {% else %}
-            <div class="welcome">
-                <h1>Welcome</h1>
-                <p>This is your personal knowledge base generated with <strong>mystuff-cli</strong>.</p>
-                
-                <div class="getting-started">
-                    <h2>Getting Started</h2>
-                    <p>To show your GitHub pinned repositories, add your username to <code>~/.mystuff/config.yaml</code>:</p>
-                    <pre><code>generate:
+        {% if learning %}
+        <h2>Current Learning</h2>
+        <p><strong>Current lesson:</strong> <a href="{{ learning.url }}">{{ learning.title }}</a></p>
+        {% endif %}
+        
+        {% if repositories %}
+        <h2>OSS</h2>
+        <ul>
+            {% for repo in repositories %}
+            <li>
+                <strong><a href="{{ repo.url }}" target="_blank">{{ repo.name }}</a></strong>
+                {% if repo.description %} - {{ repo.description }}{% endif %}
+                {% if repo.language %} [{{ repo.language }}]{% endif %}
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <h2>Welcome</h2>
+        <p>This is your personal knowledge base generated with mystuff-cli.</p>
+        
+        <h3>Getting Started</h3>
+        <p>To show your GitHub pinned repositories, add your username to ~/.mystuff/config.yaml:</p>
+        <pre>generate:
   web:
     output: "~/mystuff_web"
     title: "{{ title }}"
@@ -78,14 +52,11 @@
       - name: "GitHub"
         url: "https://github.com/your-username"
       - name: "Blog"
-        url: "/blog"</code></pre>
-                    
-                    <p>Then regenerate your site:</p>
-                    <pre><code>mystuff generate web</code></pre>
-                </div>
-            </div>
-            {% endif %}
-        </main>
-    </div>
+        url: "/blog"</pre>
+        
+        <p>Then regenerate your site:</p>
+        <pre>mystuff generate web</pre>
+        {% endif %}
+    </main>
 </body>
 </html>

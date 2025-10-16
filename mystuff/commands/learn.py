@@ -720,8 +720,26 @@ def convert_markdown_to_html(markdown_path: Path, theme: str = "default") -> str
     return temp_path
 
 
+def is_numeric_lesson(filename: str) -> bool:
+    """Check if a filename follows the numeric lesson format (e.g., 01.md, 02.md).
+    
+    Args:
+        filename: The filename to check (e.g., "01.md" or "lesson.md")
+            
+    Returns:
+        True if the filename starts with digits, False otherwise
+    """
+    import re
+    # Match filenames that start with one or more digits followed by optional text and .md
+    # Examples: 01.md, 02-intro.md, 123-advanced.md
+    pattern = r'^\d+'
+    return bool(re.match(pattern, filename))
+
+
 def get_all_lessons(recursive: bool = True) -> List[Dict[str, str]]:
     """Get all lessons with their metadata.
+    
+    Only includes lessons with numeric filenames (e.g., 01.md, 02.md, 03-intro.md).
 
     Args:
         recursive: Whether to search recursively through subdirectories
@@ -739,7 +757,7 @@ def get_all_lessons(recursive: bool = True) -> List[Dict[str, str]]:
     if recursive:
         # Recursive search through all subdirectories
         for file_path in sorted(lessons_dir.glob("**/*.md")):
-            if file_path.is_file():
+            if file_path.is_file() and is_numeric_lesson(file_path.name):
                 # Get relative path from lessons directory
                 rel_path = file_path.relative_to(lessons_dir)
 
@@ -753,7 +771,7 @@ def get_all_lessons(recursive: bool = True) -> List[Dict[str, str]]:
     else:
         # Only top-level lessons
         for file_path in sorted(lessons_dir.glob("*.md")):
-            if file_path.is_file():
+            if file_path.is_file() and is_numeric_lesson(file_path.name):
                 lesson = {
                     "name": file_path.name,
                     "path": str(file_path),
