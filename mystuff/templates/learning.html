@@ -43,8 +43,7 @@
         {% for lesson in lessons %}
         <li data-topic="{{ lesson.topic|default('') }}" data-status="{{ lesson.status|default('') }}">
           <strong><a href="{{ lesson.url }}">{{ lesson.title }}</a></strong>
-          {% if lesson.topic %} - {{ lesson.topic }}{% endif %} {% if
-          lesson.status %} {% if lesson.status == 'done' %} [DONE]{% endif %} {%
+          {% if lesson.status %} {% if lesson.status == 'done' %} [DONE]{% endif %} {%
           if lesson.status == 'current' %} [CURRENT]{% endif %} {% if
           lesson.status == 'todo' %} [TODO]{% endif %} {% endif %} {% if
           lesson.description %}

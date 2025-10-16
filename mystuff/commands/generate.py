@@ -619,18 +619,60 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any]) -> None:
         lesson_html = md.convert(content_without_frontmatter)
         
         # Determine prev/next lessons
-        prev_lesson = all_lessons[idx - 1] if idx > 0 else None
-        next_lesson = all_lessons[idx + 1] if idx < len(all_lessons) - 1 else None
+        prev_lesson_data = all_lessons[idx - 1] if idx > 0 else None
+        next_lesson_data = all_lessons[idx + 1] if idx < len(all_lessons) - 1 else None
         
         # Calculate relative path to root based on depth
         # The lesson will be at lessons/{path}, so we need to count all directory levels
         # For example: lessons/01/01/01.html needs ../../../ (3 levels up)
         lesson_rel_path = Path(lesson["path"])
+        current_dir = lesson_rel_path.parent
         # Count directories in the relative path (excluding filename)
         depth = len(lesson_rel_path.parts) - 1
         # Add 1 for the "lessons" directory itself
         depth += 1
         relative_root = "../" * depth if depth > 0 else "./"
+        
+        # Calculate relative URLs for prev/next lessons
+        prev_lesson = None
+        if prev_lesson_data:
+            prev_path = Path(prev_lesson_data["path"])
+            prev_dir = prev_path.parent
+            
+            # If same directory, just use filename
+            if current_dir == prev_dir:
+                relative_prev = prev_path.name.replace(".md", ".html")
+            else:
+                # Calculate relative path between directories
+                # Count how many levels to go up from current
+                up_levels = len(current_dir.parts)
+                # Then go down to target directory
+                relative_prev = ("../" * up_levels) + str(prev_path).replace(".md", ".html")
+            
+            prev_lesson = {
+                "url": relative_prev,
+                "title": prev_lesson_data["title"]
+            }
+        
+        next_lesson = None
+        if next_lesson_data:
+            next_path = Path(next_lesson_data["path"])
+            next_dir = next_path.parent
+            
+            # If same directory, just use filename
+            if current_dir == next_dir:
+                relative_next = next_path.name.replace(".md", ".html")
+            else:
+                # Calculate relative path between directories
+                # Count how many levels to go up from current
+                up_levels = len(current_dir.parts)
+                # Then go down to target directory
+                relative_next = ("../" * up_levels) + str(next_path).replace(".md", ".html")
+            
+            next_lesson = {
+                "url": relative_next,
+                "title": next_lesson_data["title"]
+            }
         
         # Prepare context
         context = {
@@ -639,7 +681,7 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any]) -> None:
             "author": config.get("author", "Your Name"),
             "menu_items": config.get("menu_items", []),
             "lesson_title": lesson["title"],
-            "lesson_html": lesson_html,
+            "lesson_content": lesson_html,  # Changed from lesson_html to lesson_content
             "prev_lesson": prev_lesson,
             "next_lesson": next_lesson,
             "relative_root": relative_root,

@@ -18,34 +18,22 @@
     </nav>
 
     <main>
-      {% if breadcrumb %}
-      <p><strong>Topic:</strong> {{ breadcrumb }}</p>
-      {% endif %} {% if lesson_status %}
-      <p><strong>Status:</strong> {{ lesson_status|upper }}</p>
-      {% endif %}
-
-      <div>{{ lesson_content|safe }}</div>
+      {{ lesson_content|safe }}
 
       {% if prev_lesson or next_lesson %}
+      <hr>
       <nav>
-        <h2>Navigation</h2>
-        <ul>
-          {% if prev_lesson %}
-          <li>
-            <a href="{{ prev_lesson.url }}"
-              >Previous: {{ prev_lesson.title }}</a
-            >
-          </li>
-          {% endif %} {% if next_lesson %}
-          <li>
-            <a href="{{ next_lesson.url }}">Next: {{ next_lesson.title }}</a>
-          </li>
-          {% endif %}
-        </ul>
+        {% if prev_lesson %}
+        <p><a href="{{ prev_lesson.url }}">← Previous: {{ prev_lesson.title }}</a></p>
+        {% endif %}
+        {% if next_lesson %}
+        <p><a href="{{ next_lesson.url }}">→ Next: {{ next_lesson.title }}</a></p>
+        {% endif %}
       </nav>
       {% endif %}
 
-      <p><a href="{{ relative_root }}learning.html">Back to Learning</a></p>
+      <hr>
+      <p><a href="{{ relative_root }}learning.html">← Back to Learning</a></p>
     </main>
   </body>
 </html>
