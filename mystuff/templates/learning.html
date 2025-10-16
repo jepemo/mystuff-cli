@@ -1,97 +1,101 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@{{ author }}</title>
-    <link rel="shortcut icon" href="favicon.ico">
-    <link rel="stylesheet" href="css/style.css">
-</head>
-<body>
+    <link rel="shortcut icon" href="favicon.ico" />
+    <link rel="stylesheet" href="css/style.css" />
+  </head>
+  <body>
     <h1>Learning</h1>
-    
+
     <nav>
-        <a href="index.html">Home</a> | 
-        <a href="learning.html">Learning</a> | 
-        <a href="links.html">Links</a>
+      <a href="index.html">Home</a> | <a href="learning.html">Learning</a> |
+      <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} | 
+      <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
     </nav>
-    
+
     <main>
-        <p>Structured learning materials and notes organized by topic.</p>
-        
-        <form action="#" method="get">
-            <label for="search">Search lessons:</label>
-            <input type="search" id="search" name="search" placeholder="Type to search...">
-            
-            <label for="filter">Filter:</label>
-            <select id="filter" name="filter">
-                <option value="all">All Lessons</option>
-                <option value="current">Current</option>
-                <option value="done">Done</option>
-                <option value="todo">To Do</option>
-            </select>
-        </form>
-        
-        {% if lessons %}
-        <h2>Lessons ({{ lessons|length }} total)</h2>
-        <ul>
-            {% for lesson in lessons %}
-            <li>
-                <strong><a href="{{ lesson.url }}">{{ lesson.title }}</a></strong>
-                {% if lesson.topic %} - {{ lesson.topic }}{% endif %}
-                {% if lesson.status %}
-                    {% if lesson.status == 'done' %} [DONE]{% endif %}
-                    {% if lesson.status == 'current' %} [CURRENT]{% endif %}
-                    {% if lesson.status == 'todo' %} [TODO]{% endif %}
-                {% endif %}
-                {% if lesson.description %}
-                <br>{{ lesson.description }}
-                {% endif %}
-            </li>
-            {% endfor %}
-        </ul>
-        {% else %}
-        <p>No lessons found. Add some markdown files to your learning directory.</p>
-        {% endif %}
+      <p>Structured learning materials and notes organized by topic.</p>
+
+      <form action="#" method="get">
+        <label for="search">Search lessons:</label>
+        <input
+          type="search"
+          id="search"
+          name="search"
+          placeholder="Type to search..."
+        />
+
+        <label for="filter">Filter:</label>
+        <select id="filter" name="filter">
+          <option value="all">All Lessons</option>
+          <option value="current">Current</option>
+          <option value="done">Done</option>
+          <option value="todo">To Do</option>
+        </select>
+      </form>
+
+      {% if lessons %}
+      <h2>Lessons ({{ lessons|length }} total)</h2>
+      <ul>
+        {% for lesson in lessons %}
+        <li>
+          <strong><a href="{{ lesson.url }}">{{ lesson.title }}</a></strong>
+          {% if lesson.topic %} - {{ lesson.topic }}{% endif %} {% if
+          lesson.status %} {% if lesson.status == 'done' %} [DONE]{% endif %} {%
+          if lesson.status == 'current' %} [CURRENT]{% endif %} {% if
+          lesson.status == 'todo' %} [TODO]{% endif %} {% endif %} {% if
+          lesson.description %}
+          <br />{{ lesson.description }} {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
+      <p>
+        No lessons found. Add some markdown files to your learning directory.
+      </p>
+      {% endif %}
     </main>
-    
+
     <script>
-    // Simple search and filter functionality
-    document.addEventListener('DOMContentLoaded', function() {
-        const searchInput = document.getElementById('search');
-        const filterSelect = document.getElementById('filter');
-        const lessonItems = document.querySelectorAll('main ul li');
-        
+      // Simple search and filter functionality
+      document.addEventListener("DOMContentLoaded", function () {
+        const searchInput = document.getElementById("search");
+        const filterSelect = document.getElementById("filter");
+        const lessonItems = document.querySelectorAll("main ul li");
+
         function filterLessons() {
-            const searchTerm = searchInput.value.toLowerCase();
-            const filterValue = filterSelect.value;
-            
-            lessonItems.forEach(function(item) {
-                const text = item.textContent.toLowerCase();
-                const matchesSearch = text.includes(searchTerm);
-                let matchesFilter = true;
-                
-                if (filterValue !== 'all') {
-                    if (filterValue === 'done') {
-                        matchesFilter = text.includes('[done]');
-                    } else if (filterValue === 'current') {
-                        matchesFilter = text.includes('[current]');
-                    } else if (filterValue === 'todo') {
-                        matchesFilter = text.includes('[todo]');
-                    }
-                }
-                
-                if (matchesSearch && matchesFilter) {
-                    item.style.display = 'list-item';
-                } else {
-                    item.style.display = 'none';
-                }
-            });
+          const searchTerm = searchInput.value.toLowerCase();
+          const filterValue = filterSelect.value;
+
+          lessonItems.forEach(function (item) {
+            const text = item.textContent.toLowerCase();
+            const matchesSearch = text.includes(searchTerm);
+            let matchesFilter = true;
+
+            if (filterValue !== "all") {
+              if (filterValue === "done") {
+                matchesFilter = text.includes("[done]");
+              } else if (filterValue === "current") {
+                matchesFilter = text.includes("[current]");
+              } else if (filterValue === "todo") {
+                matchesFilter = text.includes("[todo]");
+              }
+            }
+
+            if (matchesSearch && matchesFilter) {
+              item.style.display = "list-item";
+            } else {
+              item.style.display = "none";
+            }
+          });
         }
-        
-        searchInput.addEventListener('input', filterLessons);
-        filterSelect.addEventListener('change', filterLessons);
-    });
+
+        searchInput.addEventListener("input", filterLessons);
+        filterSelect.addEventListener("change", filterLessons);
+      });
     </script>
-</body>
+  </body>
 </html>

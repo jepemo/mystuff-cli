@@ -1,49 +1,51 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@{{ author }}</title>
-    <link rel="shortcut icon" href="{{ relative_root }}favicon.ico">
-    <link rel="stylesheet" href="{{ relative_root }}css/style.css">
-</head>
-<body>
+    <link rel="shortcut icon" href="{{ relative_root }}favicon.ico" />
+    <link rel="stylesheet" href="{{ relative_root }}css/style.css" />
+  </head>
+  <body>
     <h1>{{ lesson_title }}</h1>
-    
+
     <nav>
-        <a href="{{ relative_root }}index.html">Home</a> | 
-        <a href="{{ relative_root }}learning.html">Learning</a> | 
-        <a href="{{ relative_root }}links.html">Links</a>
+      <a href="{{ relative_root }}index.html">Home</a> |
+      <a href="{{ relative_root }}learning.html">Learning</a> |
+      <a href="{{ relative_root }}links.html">Links</a>{% if menu_items %}{% for item in menu_items %} | 
+      <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
     </nav>
-    
+
     <main>
-        {% if breadcrumb %}
-        <p><strong>Topic:</strong> {{ breadcrumb }}</p>
-        {% endif %}
-        
-        {% if lesson_status %}
-        <p><strong>Status:</strong> {{ lesson_status|upper }}</p>
-        {% endif %}
-        
-        <div>
-            {{ lesson_content|safe }}
-        </div>
-        
-        {% if prev_lesson or next_lesson %}
-        <nav>
-            <h2>Navigation</h2>
-            <ul>
-                {% if prev_lesson %}
-                <li><a href="{{ prev_lesson.url }}">Previous: {{ prev_lesson.title }}</a></li>
-                {% endif %}
-                {% if next_lesson %}
-                <li><a href="{{ next_lesson.url }}">Next: {{ next_lesson.title }}</a></li>
-                {% endif %}
-            </ul>
-        </nav>
-        {% endif %}
-        
-        <p><a href="{{ relative_root }}learning.html">Back to Learning</a></p>
+      {% if breadcrumb %}
+      <p><strong>Topic:</strong> {{ breadcrumb }}</p>
+      {% endif %} {% if lesson_status %}
+      <p><strong>Status:</strong> {{ lesson_status|upper }}</p>
+      {% endif %}
+
+      <div>{{ lesson_content|safe }}</div>
+
+      {% if prev_lesson or next_lesson %}
+      <nav>
+        <h2>Navigation</h2>
+        <ul>
+          {% if prev_lesson %}
+          <li>
+            <a href="{{ prev_lesson.url }}"
+              >Previous: {{ prev_lesson.title }}</a
+            >
+          </li>
+          {% endif %} {% if next_lesson %}
+          <li>
+            <a href="{{ next_lesson.url }}">Next: {{ next_lesson.title }}</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+      {% endif %}
+
+      <p><a href="{{ relative_root }}learning.html">Back to Learning</a></p>
     </main>
-</body>
+  </body>
 </html>
