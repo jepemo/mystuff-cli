@@ -558,7 +558,7 @@ def render_template(
         raise typer.Exit(1)
 
 
-def generate_lesson_pages(output_dir: Path, config: Dict[str, Any]) -> None:
+def generate_lesson_pages(output_dir: Path, config: Dict[str, Any], generated_at: str) -> None:
     """Generate HTML pages for all lessons."""
     import markdown
     
@@ -685,6 +685,7 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any]) -> None:
             "prev_lesson": prev_lesson,
             "next_lesson": next_lesson,
             "relative_root": relative_root,
+            "generated_at": generated_at,
         }
         
         # Generate output path
@@ -736,6 +737,9 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         console.print("  ℹ️  No current lesson found")
     
     # Prepare context for templates
+    from datetime import datetime
+    generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
+    
     context = {
         "title": config.get("title", "My Knowledge Base"),
         "description": config.get("description", "Personal knowledge management"),
@@ -745,6 +749,7 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         "repositories": repos,
         "links_json": json.dumps(links),
         "learning": learning,
+        "generated_at": generated_at,
     }
     
     # Generate index.html
@@ -774,7 +779,7 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         render_template("learning.html", lessons_context, output_dir / "learning.html")
         
         # Generate individual lesson pages
-        generate_lesson_pages(output_dir, config)
+        generate_lesson_pages(output_dir, config, generated_at)
     else:
         if not learning_template.exists():
             console.print(
