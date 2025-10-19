@@ -14,7 +14,23 @@ sync_app = typer.Typer(help="Execute custom sync commands from configuration")
 
 
 def get_mystuff_dir() -> Optional[Path]:
-    """Get the mystuff directory by looking for config.yaml."""
+    """Get the mystuff directory by looking for config.yaml.
+    
+    Priority:
+    1. Check MYSTUFF_HOME environment variable first
+    2. Fall back to searching in current directory and parent directories
+    """
+    import os
+    
+    # Check MYSTUFF_HOME environment variable first
+    mystuff_home = os.getenv("MYSTUFF_HOME")
+    if mystuff_home:
+        mystuff_path = Path(mystuff_home).expanduser().resolve()
+        config_file = mystuff_path / "config.yaml"
+        if config_file.exists():
+            return mystuff_path
+    
+    # Fall back to looking for config.yaml in current directory and parent directories
     current = Path.cwd()
 
     # Look for config.yaml in current directory and parent directories
@@ -73,7 +89,11 @@ def execute_sync_commands(
     verbose: bool = False,
     continue_on_error: bool = False,
 ) -> bool:
-    """Execute a list of sync commands."""
+    """Execute a list of sync commands in a single shared shell session.
+    
+    This allows commands to share state (environment variables, working directory, etc.)
+    so that operations like 'cd' persist across multiple commands.
+    """
     if not commands:
         typer.echo("ℹ️  No commands to execute")
         return True
@@ -95,56 +115,59 @@ def execute_sync_commands(
             if verbose:
                 typer.echo(f"🔧 Setting MYSTUFF_HOME={mystuff_dir} (fallback)")
 
-    success = True
-
-    for i, command in enumerate(commands, 1):
-        if verbose or dry_run:
+    if verbose or dry_run:
+        for i, command in enumerate(commands, 1):
             typer.echo(f"[{i}/{len(commands)}] {command}")
 
-        if dry_run:
-            continue
+    if dry_run:
+        return True
 
-        try:
-            # Execute command in the mystuff directory with updated environment
-            result = subprocess.run(
-                command,
-                shell=True,
-                cwd=mystuff_dir,
-                capture_output=not verbose,
-                text=True,
-                env=env,
-            )
+    try:
+        # Build a single shell script that executes all commands
+        # This preserves state (working directory, variables, etc.) across commands
+        shell_script = "set -e\n"  # Exit on first error by default
+        
+        if continue_on_error:
+            # When continuing on error, we still need to track if any command failed
+            # Use || to continue, and track exit status with a variable
+            shell_script = """
+_sync_failed=0
+"""
+            for cmd in commands:
+                shell_script += f"({cmd}) || _sync_failed=1\n"
+            shell_script += "exit $_sync_failed\n"
+        else:
+            # Use set -e to stop on first error
+            shell_script += "\n".join(commands)
+        
+        # Execute all commands in a single shell session
+        result = subprocess.run(
+            shell_script,
+            shell=True,
+            cwd=mystuff_dir,
+            capture_output=not verbose,
+            text=True,
+            env=env,
+            executable="/bin/bash",  # Use bash to ensure 'set -e' works
+        )
 
-            if result.returncode != 0:
-                error_msg = (
-                    f"❌ Command failed (exit code {result.returncode}): {command}"
-                )
-                if result.stderr and not verbose:
-                    error_msg += f"\nError: {result.stderr.strip()}"
-
-                typer.echo(error_msg, err=True)
-                success = False
-
-                if not continue_on_error:
-                    break
+        if result.returncode != 0:
+            if not verbose:
+                typer.echo(f"❌ Sync commands failed (exit code {result.returncode})", err=True)
+                if result.stderr:
+                    typer.echo(f"Error output:\n{result.stderr.strip()}", err=True)
             else:
-                if verbose:
-                    typer.echo("✅ Command completed successfully")
-                elif not dry_run:
-                    typer.echo(".", nl=False)  # Progress indicator
+                typer.echo(f"❌ Sync commands failed (exit code {result.returncode})", err=True)
+            return False
+        else:
+            if not verbose:
+                typer.echo(".", nl=False)  # Progress indicator
+            return True
 
-        except Exception as e:
-            error_msg = f"❌ Error executing command: {command}\nError: {e}"
-            typer.echo(error_msg, err=True)
-            success = False
-
-            if not continue_on_error:
-                break
-
-    if not dry_run and not verbose:
-        typer.echo()  # New line after progress dots
-
-    return success
+    except Exception as e:
+        error_msg = f"❌ Error executing sync commands: {e}"
+        typer.echo(error_msg, err=True)
+        return False
 
 
 @sync_app.command()

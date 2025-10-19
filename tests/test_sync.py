@@ -47,13 +47,21 @@ def test_get_mystuff_dir_with_config(temp_mystuff_dir):
     import os
 
     original_cwd = os.getcwd()
+    original_mystuff_home = os.environ.get("MYSTUFF_HOME")
     try:
+        # Clear MYSTUFF_HOME to test directory search
+        if "MYSTUFF_HOME" in os.environ:
+            del os.environ["MYSTUFF_HOME"]
+        
         os.chdir(temp_mystuff_dir)
         mystuff_dir = get_mystuff_dir()
         # Resolve both paths to handle macOS /private/var vs /var differences
         assert mystuff_dir.resolve() == temp_mystuff_dir.resolve()
     finally:
         os.chdir(original_cwd)
+        # Restore MYSTUFF_HOME
+        if original_mystuff_home:
+            os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_get_mystuff_dir_no_config():
@@ -62,12 +70,20 @@ def test_get_mystuff_dir_no_config():
         import os
 
         original_cwd = os.getcwd()
+        original_mystuff_home = os.environ.get("MYSTUFF_HOME")
         try:
+            # Clear MYSTUFF_HOME to test directory search
+            if "MYSTUFF_HOME" in os.environ:
+                del os.environ["MYSTUFF_HOME"]
+            
             os.chdir(temp_dir)
             mystuff_dir = get_mystuff_dir()
             assert mystuff_dir is None
         finally:
             os.chdir(original_cwd)
+            # Restore MYSTUFF_HOME
+            if original_mystuff_home:
+                os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_load_sync_config_success(temp_mystuff_dir):
@@ -187,7 +203,12 @@ def test_sync_run_command_dry_run(runner, temp_mystuff_dir):
     import os
 
     original_cwd = os.getcwd()
+    original_mystuff_home = os.environ.get("MYSTUFF_HOME")
     try:
+        # Clear MYSTUFF_HOME to use temp directory
+        if "MYSTUFF_HOME" in os.environ:
+            del os.environ["MYSTUFF_HOME"]
+        
         os.chdir(temp_mystuff_dir)
         result = runner.invoke(sync_app, ["run", "--dry-run"])
         assert result.exit_code == 0
@@ -196,6 +217,9 @@ def test_sync_run_command_dry_run(runner, temp_mystuff_dir):
         assert "Test command 2" in result.stdout
     finally:
         os.chdir(original_cwd)
+        # Restore MYSTUFF_HOME
+        if original_mystuff_home:
+            os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_sync_run_command_success(runner, temp_mystuff_dir):
@@ -203,7 +227,12 @@ def test_sync_run_command_success(runner, temp_mystuff_dir):
     import os
 
     original_cwd = os.getcwd()
+    original_mystuff_home = os.environ.get("MYSTUFF_HOME")
     try:
+        # Clear MYSTUFF_HOME to use temp directory
+        if "MYSTUFF_HOME" in os.environ:
+            del os.environ["MYSTUFF_HOME"]
+        
         os.chdir(temp_mystuff_dir)
         result = runner.invoke(sync_app, ["run"])
         assert result.exit_code == 0
@@ -211,6 +240,9 @@ def test_sync_run_command_success(runner, temp_mystuff_dir):
         assert "All sync commands completed successfully" in result.stdout
     finally:
         os.chdir(original_cwd)
+        # Restore MYSTUFF_HOME
+        if original_mystuff_home:
+            os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_sync_run_command_no_mystuff_dir(runner):
@@ -219,13 +251,21 @@ def test_sync_run_command_no_mystuff_dir(runner):
         import os
 
         original_cwd = os.getcwd()
+        original_mystuff_home = os.environ.get("MYSTUFF_HOME")
         try:
+            # Clear MYSTUFF_HOME to test no mystuff dir found
+            if "MYSTUFF_HOME" in os.environ:
+                del os.environ["MYSTUFF_HOME"]
+            
             os.chdir(temp_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
             assert "No mystuff directory found" in result.output
         finally:
             os.chdir(original_cwd)
+            # Restore MYSTUFF_HOME
+            if original_mystuff_home:
+                os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_sync_list_commands(runner, temp_mystuff_dir):
@@ -233,7 +273,12 @@ def test_sync_list_commands(runner, temp_mystuff_dir):
     import os
 
     original_cwd = os.getcwd()
+    original_mystuff_home = os.environ.get("MYSTUFF_HOME")
     try:
+        # Clear MYSTUFF_HOME to use temp directory
+        if "MYSTUFF_HOME" in os.environ:
+            del os.environ["MYSTUFF_HOME"]
+        
         os.chdir(temp_mystuff_dir)
         result = runner.invoke(sync_app, ["list-commands"])
         assert result.exit_code == 0
@@ -242,6 +287,9 @@ def test_sync_list_commands(runner, temp_mystuff_dir):
         assert "Test command 2" in result.stdout
     finally:
         os.chdir(original_cwd)
+        # Restore MYSTUFF_HOME
+        if original_mystuff_home:
+            os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_sync_list_commands_no_commands(runner):
@@ -258,12 +306,20 @@ def test_sync_list_commands_no_commands(runner):
         import os
 
         original_cwd = os.getcwd()
+        original_mystuff_home = os.environ.get("MYSTUFF_HOME")
         try:
+            # Clear MYSTUFF_HOME to use temp directory
+            if "MYSTUFF_HOME" in os.environ:
+                del os.environ["MYSTUFF_HOME"]
+            
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["list-commands"])
             assert result.exit_code == 1  # Should exit with error when no sync section
         finally:
             os.chdir(original_cwd)
+            # Restore MYSTUFF_HOME
+            if original_mystuff_home:
+                os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_sync_with_invalid_config(runner):
@@ -279,13 +335,21 @@ def test_sync_with_invalid_config(runner):
         import os
 
         original_cwd = os.getcwd()
+        original_mystuff_home = os.environ.get("MYSTUFF_HOME")
         try:
+            # Clear MYSTUFF_HOME to use temp directory
+            if "MYSTUFF_HOME" in os.environ:
+                del os.environ["MYSTUFF_HOME"]
+            
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
             assert "Error parsing config.yaml" in result.output
         finally:
             os.chdir(original_cwd)
+            # Restore MYSTUFF_HOME
+            if original_mystuff_home:
+                os.environ["MYSTUFF_HOME"] = original_mystuff_home
 
 
 def test_sync_with_non_list_commands(runner):
@@ -302,10 +366,18 @@ def test_sync_with_non_list_commands(runner):
         import os
 
         original_cwd = os.getcwd()
+        original_mystuff_home = os.environ.get("MYSTUFF_HOME")
         try:
+            # Clear MYSTUFF_HOME to use temp directory
+            if "MYSTUFF_HOME" in os.environ:
+                del os.environ["MYSTUFF_HOME"]
+            
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
             assert "must be a list" in result.output
         finally:
             os.chdir(original_cwd)
+            # Restore MYSTUFF_HOME
+            if original_mystuff_home:
+                os.environ["MYSTUFF_HOME"] = original_mystuff_home
