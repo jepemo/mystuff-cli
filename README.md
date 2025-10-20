@@ -86,7 +86,7 @@ mystuff learn list
 # Start a lesson
 mystuff learn start python/01-variables.md
 
-# Open current lesson in web browser (with beautiful HTML styling)
+# Open current lesson in web browser (opens configured web URL)
 mystuff learn current --web
 
 # Complete and move to next lesson
@@ -96,13 +96,7 @@ mystuff learn next --web
 mystuff learn stats
 ```
 
-The `--web` option converts markdown lessons to beautifully styled HTML with:
-
-- Syntax highlighting for code blocks
-- Responsive design
-- Dark mode support
-- Clean, readable typography
-- 5 theme options: `default`, `minimal`, `github`, `dark`, `notion`
+The `--web` option opens your lesson in the default browser using the URL configured in `config.yaml` under `generate.web.url`. This allows you to view your generated static website with syntax highlighting, responsive design, and your custom theme.
 
 ## Static Website Generation
 

@@ -52,6 +52,32 @@ def get_metadata_path() -> Path:
     return get_learning_dir() / "metadata.yaml"
 
 
+def load_config() -> Dict[str, Any]:
+    """Load complete configuration from config.yaml."""
+    mystuff_dir = get_mystuff_dir()
+    config_file = mystuff_dir / "config.yaml"
+
+    if not config_file.exists():
+        typer.echo(f"❌ Configuration file not found: {config_file}", err=True)
+        raise typer.Exit(1)
+
+    try:
+        with open(config_file, "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f)
+    except yaml.YAMLError as e:
+        typer.echo(f"❌ Error parsing config.yaml: {e}", err=True)
+        raise typer.Exit(1)
+    except Exception as e:
+        typer.echo(f"❌ Error reading config.yaml: {e}", err=True)
+        raise typer.Exit(1)
+
+    if not config:
+        typer.echo("❌ Empty configuration file", err=True)
+        raise typer.Exit(1)
+
+    return config
+
+
 def ensure_learning_structure() -> None:
     """Ensure learning directory structure exists."""
     learning_dir = get_learning_dir()
@@ -885,15 +911,8 @@ def get_next_lesson(
 @learn_app.command("current")
 def open_current_lesson(
     web: Annotated[
-        bool, typer.Option("--web", help="Open lesson as HTML in web browser")
+        bool, typer.Option("--web", help="Open lesson in web browser using configured URL")
     ] = False,
-    theme: Annotated[
-        str,
-        typer.Option(
-            "--theme",
-            help="CSS theme for web view (default, minimal, github, dark, notion)",
-        ),
-    ] = "default",
 ):
     """Open the current lesson in progress using the configured editor or web browser."""
     metadata = load_metadata()
@@ -924,11 +943,26 @@ def open_current_lesson(
     typer.echo(f"📖 Opening lesson: {current}")
 
     if web:
-        # Convert to HTML and open in browser
-        html_path = convert_markdown_to_html(lesson_path, theme=theme)
-        webbrowser.open(f"file://{html_path}")
-        typer.echo(f"🌐 Opened in web browser with '{theme}' theme")
-        typer.echo(f"   Temp file: {html_path}")
+        # Open in web browser using configured URL
+        config = load_config()
+        web_config = config.get("generate", {}).get("web", {})
+        base_url = web_config.get("url")
+        
+        if not base_url:
+            typer.echo("❌ No web URL configured in config.yaml under generate.web.url", err=True)
+            raise typer.Exit(1)
+        
+        # Convert lesson path to URL path
+        # e.g., "distributed-systems/01.md" -> "lessons/distributed-systems/01.html"
+        lesson_name = current
+        if lesson_name.endswith(".md"):
+            lesson_name = lesson_name[:-3]  # Remove .md extension
+        
+        # Build URL: BASE_URL/lessons/XX/YY/ZZ.html
+        lesson_url = f"{base_url.rstrip('/')}/lessons/{lesson_name}.html"
+        
+        webbrowser.open(lesson_url)
+        typer.echo(f"🌐 Opened in web browser: {lesson_url}")
     else:
         # Open in editor
         editor = os.getenv("EDITOR", "vim")
@@ -1106,15 +1140,8 @@ def complete_lesson(
 @learn_app.command("next")
 def next_lesson(
     web: Annotated[
-        bool, typer.Option("--web", help="Open next lesson as HTML in web browser")
+        bool, typer.Option("--web", help="Open next lesson in web browser using configured URL")
     ] = False,
-    theme: Annotated[
-        str,
-        typer.Option(
-            "--theme",
-            help="CSS theme for web view (default, minimal, github, dark, notion)",
-        ),
-    ] = "default",
 ):
     """Complete current lesson and move to the next one."""
     metadata = load_metadata()
@@ -1133,7 +1160,7 @@ def next_lesson(
     # Open the new current lesson if available
     if metadata.get("current_lesson"):
         if typer.confirm("Open the next lesson now?", default=True):
-            open_current_lesson(web=web, theme=theme)
+            open_current_lesson(web=web)
     else:
         typer.echo("🎉 No more lessons to complete!")
 
