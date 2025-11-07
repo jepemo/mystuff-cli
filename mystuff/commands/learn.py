@@ -19,6 +19,9 @@ from typing_extensions import Annotated
 
 learn_app = typer.Typer(help="Manage learning materials and progress")
 
+# Reuse frontmatter extraction from generate module
+from mystuff.commands.generate import extract_frontmatter
+
 # Template for metadata
 METADATA_TEMPLATE = {
     "current_lesson": None,
@@ -787,21 +790,67 @@ def get_all_lessons(recursive: bool = True) -> List[Dict[str, str]]:
                 # Get relative path from lessons directory
                 rel_path = file_path.relative_to(lessons_dir)
 
+                # Build display name from frontmatter if available
+                display_name = str(rel_path)
+                general_topic = None
+                difficulty = None
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    frontmatter, _ = extract_frontmatter(content)
+                    if frontmatter:
+                        lesson_number = frontmatter.get("lesson_number")
+                        lesson_title = frontmatter.get("lesson_title")
+                        lesson_topic = frontmatter.get("topic")
+                        general_topic = frontmatter.get("general_topic")
+                        difficulty = frontmatter.get("difficulty")
+                        if lesson_number and lesson_title:
+                            display_name = f"{lesson_number}: {lesson_title}"
+                            if lesson_topic:
+                                display_name = f"{display_name} ({lesson_topic})"
+                except Exception:
+                    pass
+
                 # Create lesson object
                 lesson = {
                     "name": str(rel_path),  # Relative path as string
                     "path": str(file_path),  # Full path as string
-                    "display_name": str(rel_path),
+                    "display_name": display_name,
+                    "general_topic": general_topic,
+                    "difficulty": difficulty,
                 }
                 lessons.append(lesson)
     else:
         # Only top-level lessons
         for file_path in sorted(lessons_dir.glob("*.md")):
             if file_path.is_file() and is_numeric_lesson(file_path.name):
+                # Build display name from frontmatter if available
+                display_name = file_path.name
+                general_topic = None
+                difficulty = None
+                try:
+                    with open(file_path, "r", encoding="utf-8") as f:
+                        content = f.read()
+                    frontmatter, _ = extract_frontmatter(content)
+                    if frontmatter:
+                        lesson_number = frontmatter.get("lesson_number")
+                        lesson_title = frontmatter.get("lesson_title")
+                        lesson_topic = frontmatter.get("topic")
+                        general_topic = frontmatter.get("general_topic")
+                        difficulty = frontmatter.get("difficulty")
+                        if lesson_number and lesson_title:
+                            display_name = f"{lesson_number}: {lesson_title}"
+                            if lesson_topic:
+                                display_name = f"{display_name} ({lesson_topic})"
+                except Exception:
+                    pass
+
                 lesson = {
                     "name": file_path.name,
                     "path": str(file_path),
-                    "display_name": file_path.name,
+                    "display_name": display_name,
+                    "general_topic": general_topic,
+                    "difficulty": difficulty,
                 }
                 lessons.append(lesson)
 
@@ -858,7 +907,8 @@ def display_lessons_tree(
     if "_root" in lesson_tree:
         for lesson in lesson_tree["_root"]:
             status = get_lesson_status(lesson["name"], metadata)
-            root.add(f"{status} {lesson['name']}")
+            display_label = lesson.get("display_name", lesson["name"])
+            root.add(f"{status} {display_label}")
 
     # Add directories and their lessons
     for directory, dir_lessons in sorted(lesson_tree.items()):
@@ -870,9 +920,9 @@ def display_lessons_tree(
 
         # Add lessons in this directory
         for lesson in sorted(dir_lessons, key=lambda item: item["name"]):
-            name = lesson["name"].split("/")[-1]  # Just the filename
+            display_label = lesson.get("display_name", lesson["name"].split("/")[-1])
             status = get_lesson_status(lesson["name"], metadata)
-            dir_node.add(f"{status} {name}")
+            dir_node.add(f"{status} {display_label}")
 
     console.print(root)
 
@@ -986,6 +1036,12 @@ def list_lessons(
     flat: Annotated[
         bool, typer.Option("--flat", "-f", help="Don't search subdirectories")
     ] = False,
+    general_topic: Annotated[
+        Optional[str], typer.Option("--general-topic", "-g", help="Filter by general topic")
+    ] = None,
+    difficulty: Annotated[
+        Optional[str], typer.Option("--difficulty", "-d", help="Filter by difficulty (beginner, intermediate, advanced)")
+    ] = None,
 ):
     """List lessons with their status."""
     metadata = load_metadata()
@@ -1013,6 +1069,20 @@ def list_lessons(
         ]
     else:
         lessons_to_show = all_lessons
+
+    # Apply general_topic filter
+    if general_topic:
+        lessons_to_show = [
+            lesson for lesson in lessons_to_show
+            if lesson.get("general_topic") and lesson["general_topic"].lower() == general_topic.lower()
+        ]
+
+    # Apply difficulty filter
+    if difficulty:
+        lessons_to_show = [
+            lesson for lesson in lessons_to_show
+            if lesson.get("difficulty") and lesson["difficulty"].lower() == difficulty.lower()
+        ]
 
     if tree:
         # Show as tree structure
@@ -1054,7 +1124,9 @@ def list_lessons(
                 status = "⏳"
                 completed_at = ""
 
-            table.add_row(status, filename, directory, completed_at)
+            # Use display_name (constructed from frontmatter if available)
+            display_label = lesson.get("display_name", filename)
+            table.add_row(status, display_label, directory, completed_at)
 
         console.print(table)
 

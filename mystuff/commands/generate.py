@@ -409,30 +409,29 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
         else:
             status = "todo"
         
-        # Extract title from file and check Reviewed attribute
+        # Extract title from file and check public attribute
         title = None
         topic = None
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
             
-            # Extract frontmatter and check Reviewed attribute
+            # Extract frontmatter and check public attribute
             frontmatter, content_without_frontmatter = extract_frontmatter(content)
             
-            # Check Reviewed attribute in frontmatter (case-insensitive)
+            # Check public attribute in frontmatter (case-insensitive)
             if frontmatter:
-                # Check for both "reviewed" (lowercase) and "Reviewed" (uppercase)
-                reviewed = None
-                if "reviewed" in frontmatter:
-                    reviewed = frontmatter["reviewed"]
-                elif "Reviewed" in frontmatter:
-                    reviewed = frontmatter["Reviewed"]
+                # Check for both "public" (lowercase) and "Public" (uppercase)
+                public = None
+                if "public" in frontmatter:
+                    public = frontmatter["public"]
+                elif "Public" in frontmatter:
+                    public = frontmatter["Public"]
                 
-                # If reviewed exists and is false, skip this lesson
-                if reviewed is False:
+                # If public is explicitly set to false, skip this lesson
+                if public is False:
                     continue
-                # If reviewed exists and is true, include it
-                # If reviewed doesn't exist, include it (default behavior)
+                # If public is true or doesn't exist, include it (default behavior)
             
             # Extract title and topic from content (after frontmatter removal)
             title = extract_lesson_title(content_without_frontmatter)
@@ -594,23 +593,22 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any], generated_at
         with open(lesson_path, "r", encoding="utf-8") as f:
             md_content = f.read()
         
-        # Extract frontmatter and check Reviewed attribute
+        # Extract frontmatter and check public attribute
         frontmatter, content_without_frontmatter = extract_frontmatter(md_content)
         
-        # Check Reviewed attribute in frontmatter (case-insensitive)
+        # Check public attribute in frontmatter (case-insensitive)
         if frontmatter:
-            # Check for both "reviewed" (lowercase) and "Reviewed" (uppercase)
-            reviewed = None
-            if "reviewed" in frontmatter:
-                reviewed = frontmatter["reviewed"]
-            elif "Reviewed" in frontmatter:
-                reviewed = frontmatter["Reviewed"]
+            # Check for both "public" (lowercase) and "Public" (uppercase)
+            public = None
+            if "public" in frontmatter:
+                public = frontmatter["public"]
+            elif "Public" in frontmatter:
+                public = frontmatter["Public"]
             
-            # If reviewed exists and is false, skip generating HTML for this lesson
-            if reviewed is False:
+            # If public is explicitly set to false, skip generating HTML for this lesson
+            if public is False:
                 continue
-            # If reviewed exists and is true, generate it
-            # If reviewed doesn't exist, generate it (default behavior)
+            # If public is true or doesn't exist, generate it (default behavior)
         
         # Convert markdown to HTML with syntax highlighting (use content without frontmatter)
         md = markdown.Markdown(
