@@ -412,6 +412,9 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
         # Extract title from file and check public attribute
         title = None
         topic = None
+        lesson_number = None
+        general_topic = None
+        difficulty = None
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
@@ -432,10 +435,19 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
                 if public is False:
                     continue
                 # If public is true or doesn't exist, include it (default behavior)
+                
+                # Use frontmatter fields first if available
+                title = frontmatter.get("lesson_title") or frontmatter.get("title")
+                topic = frontmatter.get("topic")
+                lesson_number = frontmatter.get("lesson_number")
+                general_topic = frontmatter.get("general_topic")
+                difficulty = frontmatter.get("difficulty")
             
-            # Extract title and topic from content (after frontmatter removal)
-            title = extract_lesson_title(content_without_frontmatter)
-            topic = extract_lesson_topic(content_without_frontmatter)
+            # Fallback to extracting from content if not in frontmatter
+            if not title:
+                title = extract_lesson_title(content_without_frontmatter)
+            if not topic:
+                topic = extract_lesson_topic(content_without_frontmatter)
             
         except Exception:
             pass
@@ -449,14 +461,33 @@ def load_all_lessons_with_status() -> List[Dict[str, Any]]:
         # Generate URL for the lesson page
         lesson_url = f"lessons/{str(rel_path).replace('.md', '.html')}"
         
+        # Create formatted display title: Day ${lesson_number}: ${lesson_title} (${topic})
+        display_title = title  # Default fallback
+        if lesson_number and title:
+            # Format lesson_number as 3-digit string (001, 002, etc.)
+            try:
+                formatted_number = str(int(lesson_number)).zfill(3)
+            except (ValueError, TypeError):
+                # If lesson_number is not a valid number, use as-is
+                formatted_number = str(lesson_number).zfill(3)
+            
+            if topic:
+                display_title = f"Day {formatted_number}: {title} ({topic})"
+            else:
+                display_title = f"Day {formatted_number}: {title}"
+        
         lessons.append({
             "name": lesson_name,
             "title": title,
+            "display_title": display_title,  # New formatted title for display
             "status": status,
             "path": str(rel_path),
             "filename": file_path.name,
             "url": lesson_url,
-            "topic": topic,  # Add topic field
+            "topic": topic,
+            "lesson_number": lesson_number,  # Add lesson_number field
+            "general_topic": general_topic,  # Add general_topic field
+            "difficulty": difficulty,  # Add difficulty field
         })
     
     # Sort by path (preserves directory structure order: 01/01/01.md, 01/01/02.md, etc.)
@@ -612,7 +643,8 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any], generated_at
         
         # Convert markdown to HTML with syntax highlighting (use content without frontmatter)
         md = markdown.Markdown(
-            extensions=["fenced_code", "tables", "codehilite", "nl2br"]
+            extensions=["fenced_code", "tables", "codehilite"],
+            tab_length=2  # Support 2-space indentation for nested lists
         )
         lesson_html = md.convert(content_without_frontmatter)
         

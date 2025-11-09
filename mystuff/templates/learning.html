@@ -28,12 +28,25 @@
           placeholder="Type to search..."
         />
 
-        <label for="filter">Filter:</label>
+        <label for="filter">Status:</label>
         <select id="filter" name="filter">
           <option value="all">All Lessons</option>
           <option value="current">Current</option>
           <option value="done">Done</option>
           <option value="todo">To Do</option>
+        </select>
+
+        <label for="general-topic-filter">General Topic:</label>
+        <select id="general-topic-filter" name="general-topic-filter">
+          <option value="all">All Topics</option>
+        </select>
+
+        <label for="difficulty-filter">Difficulty:</label>
+        <select id="difficulty-filter" name="difficulty-filter">
+          <option value="all">All Levels</option>
+          <option value="beginner">Beginner</option>
+          <option value="intermediate">Intermediate</option>
+          <option value="advanced">Advanced</option>
         </select>
       </form>
 
@@ -41,8 +54,8 @@
       <h2>Lessons ({{ lessons|length }} total)</h2>
       <ul>
         {% for lesson in lessons %}
-        <li data-topic="{{ lesson.topic|default('') }}" data-status="{{ lesson.status|default('') }}">
-          <strong><a href="{{ lesson.url }}">{{ lesson.title }}</a></strong>
+        <li data-topic="{{ lesson.topic|default('') }}" data-status="{{ lesson.status|default('') }}" data-general-topic="{{ lesson.general_topic|default('') }}" data-difficulty="{{ lesson.difficulty|default('') }}">
+          <strong><a href="{{ lesson.url }}">{{ lesson.display_title|default(lesson.title) }}</a></strong>
           {% if lesson.status %} {% if lesson.status == 'done' %} [DONE]{% endif %} {%
           if lesson.status == 'current' %} [CURRENT]{% endif %} {% if
           lesson.status == 'todo' %} [TODO]{% endif %} {% endif %} {% if
@@ -63,24 +76,59 @@
       document.addEventListener("DOMContentLoaded", function () {
         const searchInput = document.getElementById("search");
         const filterSelect = document.getElementById("filter");
+        const generalTopicFilter = document.getElementById("general-topic-filter");
+        const difficultyFilter = document.getElementById("difficulty-filter");
         const lessonItems = document.querySelectorAll("main ul li");
+
+        // Populate general topic filter options dynamically
+        function populateGeneralTopicFilter() {
+          const generalTopics = new Set();
+          lessonItems.forEach(function (item) {
+            const generalTopic = item.getAttribute("data-general-topic");
+            if (generalTopic && generalTopic.trim() !== "") {
+              generalTopics.add(generalTopic);
+            }
+          });
+          
+          // Add unique general topics to the filter
+          generalTopics.forEach(function (topic) {
+            const option = document.createElement("option");
+            option.value = topic.toLowerCase();
+            option.textContent = topic;
+            generalTopicFilter.appendChild(option);
+          });
+        }
 
         function filterLessons() {
           const searchTerm = searchInput.value.toLowerCase();
           const filterValue = filterSelect.value;
+          const generalTopicValue = generalTopicFilter.value;
+          const difficultyValue = difficultyFilter.value;
 
           lessonItems.forEach(function (item) {
             const text = item.textContent.toLowerCase();
             const itemStatus = item.getAttribute("data-status") || "";
+            const itemGeneralTopic = (item.getAttribute("data-general-topic") || "").toLowerCase();
+            const itemDifficulty = (item.getAttribute("data-difficulty") || "").toLowerCase();
             
             const matchesSearch = text.includes(searchTerm);
             
-            let matchesFilter = true;
+            let matchesStatusFilter = true;
             if (filterValue !== "all") {
-              matchesFilter = itemStatus === filterValue;
+              matchesStatusFilter = itemStatus === filterValue;
             }
 
-            if (matchesSearch && matchesFilter) {
+            let matchesGeneralTopicFilter = true;
+            if (generalTopicValue !== "all") {
+              matchesGeneralTopicFilter = itemGeneralTopic === generalTopicValue;
+            }
+
+            let matchesDifficultyFilter = true;
+            if (difficultyValue !== "all") {
+              matchesDifficultyFilter = itemDifficulty === difficultyValue;
+            }
+
+            if (matchesSearch && matchesStatusFilter && matchesGeneralTopicFilter && matchesDifficultyFilter) {
               item.style.display = "list-item";
             } else {
               item.style.display = "none";
@@ -88,8 +136,13 @@
           });
         }
 
+        // Initialize general topic filter
+        populateGeneralTopicFilter();
+
         searchInput.addEventListener("input", filterLessons);
         filterSelect.addEventListener("change", filterLessons);
+        generalTopicFilter.addEventListener("change", filterLessons);
+        difficultyFilter.addEventListener("change", filterLessons);
       });
     </script>
 
