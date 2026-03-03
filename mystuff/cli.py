@@ -3,8 +3,9 @@
 MyStuff CLI - Personal knowledge management tool
 """
 
+from typing import Annotated
+
 import typer
-from typing_extensions import Annotated
 
 from mystuff.commands.eval import eval_app
 from mystuff.commands.generate import generate_app

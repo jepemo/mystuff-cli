@@ -7,11 +7,10 @@ import os
 import re
 import subprocess
 from pathlib import Path
-from typing import List, Optional, Set
+from typing import Annotated, List, Optional, Set
 
 import typer
 import yaml
-from typing_extensions import Annotated
 
 
 def get_mystuff_dir() -> Path:

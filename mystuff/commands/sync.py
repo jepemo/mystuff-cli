@@ -4,11 +4,10 @@ MyStuff CLI - Sync commands functionality
 """
 import subprocess
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 import typer
 import yaml
-from typing_extensions import Annotated
 
 sync_app = typer.Typer(help="Execute custom sync commands from configuration")
 

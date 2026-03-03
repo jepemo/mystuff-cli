@@ -12,11 +12,10 @@ import urllib.request
 import webbrowser
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 from urllib.parse import urlparse
 
 import typer
-from typing_extensions import Annotated
 
 
 def get_mystuff_dir() -> Path:

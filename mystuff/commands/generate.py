@@ -7,13 +7,12 @@ import os
 import shutil
 import urllib.request
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 import jinja2
 import typer
 import yaml
 from rich.console import Console
-from typing_extensions import Annotated
 
 console = Console()
 

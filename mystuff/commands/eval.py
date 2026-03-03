@@ -9,11 +9,10 @@ import subprocess
 from collections import defaultdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import typer
 import yaml
-from typing_extensions import Annotated
 
 
 def get_mystuff_dir() -> Path:

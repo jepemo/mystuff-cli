@@ -6,9 +6,10 @@ Creates the basic directory structure for mystuff data
 import os
 from pathlib import Path
 
+from typing import Annotated
+
 import typer
 import yaml
-from typing_extensions import Annotated
 
 
 def init(

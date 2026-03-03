@@ -7,11 +7,10 @@ import os
 import subprocess
 from datetime import datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import Annotated, List, Optional
 
 import typer
 import yaml
-from typing_extensions import Annotated
 
 
 def get_mystuff_dir() -> Path:

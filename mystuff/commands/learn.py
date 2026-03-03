@@ -7,7 +7,7 @@ import os
 import tempfile
 import webbrowser
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 import markdown
 import typer
@@ -15,7 +15,6 @@ import yaml
 from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
-from typing_extensions import Annotated
 
 learn_app = typer.Typer(help="Manage learning materials and progress")
 
