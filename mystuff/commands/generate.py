@@ -4,12 +4,16 @@ MyStuff CLI - Generate static content functionality
 """
 import json
 import os
+import posixpath
 import shutil
 import urllib.request
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
+from urllib.parse import urlsplit, urlunsplit
 
 import jinja2
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 import typer
 import yaml
 from rich.console import Console
@@ -17,6 +21,87 @@ from rich.console import Console
 console = Console()
 
 generate_app = typer.Typer(help="Generate static content from mystuff data")
+
+
+def rewrite_lesson_markdown_link(
+    href: str, source_lesson_path: Path, known_lesson_paths: set[str]
+) -> str:
+    """Rewrite relative lesson markdown links to the published HTML path."""
+    parsed = urlsplit(href)
+
+    # Keep external, absolute, fragment-only, and non-markdown links unchanged.
+    if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
+        return href
+
+    if not parsed.path.lower().endswith(".md"):
+        return href
+
+    source_rel_path = source_lesson_path.as_posix()
+    source_rel_dir = posixpath.dirname(source_rel_path) or "."
+    resolved_target = posixpath.normpath(posixpath.join(source_rel_dir, parsed.path))
+
+    # Ignore paths that escape the lessons tree or do not map to a generated lesson.
+    if resolved_target == ".." or resolved_target.startswith("../"):
+        return href
+
+    if resolved_target not in known_lesson_paths:
+        return href
+
+    current_output_dir = posixpath.dirname(
+        source_rel_path.removesuffix(".md") + ".html"
+    ) or "."
+    target_output_path = resolved_target.removesuffix(".md") + ".html"
+    relative_output_path = posixpath.relpath(target_output_path, start=current_output_dir)
+
+    return urlunsplit(
+        ("", "", relative_output_path, parsed.query, parsed.fragment)
+    )
+
+
+class LessonLinkRewriteTreeprocessor(Treeprocessor):
+    """Rewrite lesson-to-lesson markdown links in emitted HTML anchors."""
+
+    def __init__(
+        self, md, source_lesson_path: Path, known_lesson_paths: set[str]
+    ) -> None:
+        super().__init__(md)
+        self.source_lesson_path = source_lesson_path
+        self.known_lesson_paths = known_lesson_paths
+
+    def run(self, root):
+        for element in root.iter("a"):
+            href = element.get("href")
+            if not href:
+                continue
+
+            element.set(
+                "href",
+                rewrite_lesson_markdown_link(
+                    href, self.source_lesson_path, self.known_lesson_paths
+                ),
+            )
+
+        return root
+
+
+class LessonLinkRewriteExtension(Extension):
+    """Markdown extension that rewrites internal lesson links to HTML pages."""
+
+    def __init__(
+        self, *, source_lesson_path: Path, known_lesson_paths: set[str], **kwargs
+    ) -> None:
+        self.source_lesson_path = source_lesson_path
+        self.known_lesson_paths = known_lesson_paths
+        super().__init__(**kwargs)
+
+    def extendMarkdown(self, md) -> None:
+        md.treeprocessors.register(
+            LessonLinkRewriteTreeprocessor(
+                md, self.source_lesson_path, self.known_lesson_paths
+            ),
+            "lesson_link_rewrite",
+            15,
+        )
 
 
 def get_mystuff_dir() -> Path:
@@ -611,6 +696,7 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any], generated_at
         return
     
     console.print(f"  📚 Generating {len(all_lessons)} lesson pages...")
+    known_lesson_paths = {lesson["path"] for lesson in all_lessons}
     
     # Generate HTML for each lesson
     for idx, lesson in enumerate(all_lessons):
@@ -642,7 +728,15 @@ def generate_lesson_pages(output_dir: Path, config: Dict[str, Any], generated_at
         
         # Convert markdown to HTML with syntax highlighting (use content without frontmatter)
         md = markdown.Markdown(
-            extensions=["fenced_code", "tables", "codehilite"],
+            extensions=[
+                "fenced_code",
+                "tables",
+                "codehilite",
+                LessonLinkRewriteExtension(
+                    source_lesson_path=Path(lesson["path"]),
+                    known_lesson_paths=known_lesson_paths,
+                ),
+            ],
             tab_length=2  # Support 2-space indentation for nested lists
         )
         lesson_html = md.convert(content_without_frontmatter)

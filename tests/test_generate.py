@@ -11,6 +11,7 @@ from mystuff.commands.generate import (
     copy_static_files,
     ensure_output_structure,
     extract_lesson_title,
+    generate_lesson_pages,
     generate_static_web,
     get_generate_config,
     load_learning_data,
@@ -467,3 +468,71 @@ def test_extract_lesson_title_empty_content():
     """Test extract_lesson_title with empty content."""
     result = extract_lesson_title("")
     assert result is None
+
+
+def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
+    temp_mystuff_dir, temp_output_dir, tmp_path, monkeypatch
+):
+    """Lesson markdown links should be rewritten to relative HTML links."""
+    learning_dir = temp_mystuff_dir / "learning"
+    lessons_dir = learning_dir / "lessons"
+    lessons_dir.mkdir(parents=True)
+
+    (lessons_dir / "21").mkdir()
+    (lessons_dir / "22").mkdir()
+    (lessons_dir / "shared").mkdir()
+
+    (lessons_dir / "21" / "16.md").write_text("# Day 016: Prior lesson\n")
+    (lessons_dir / "22" / "02.md").write_text("# Day 022: Next lesson\n")
+    (lessons_dir / "shared" / "README.md").write_text("# Shared docs\n")
+
+    (lessons_dir / "22" / "01.md").write_text(
+        "\n".join(
+            [
+                "# Day 021: Current lesson",
+                "",
+                "[Previous](../21/16.md)",
+                "[Next](02.md)",
+                "[Anchor](../21/16.md#key-insights)",
+                "[External](https://example.com/docs.md)",
+                "[Mail](mailto:test@example.com)",
+                "[Fragment](#answers)",
+                "[Shared](../shared/README.md)",
+            ]
+        )
+    )
+
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "lesson.html").write_text("{{ lesson_content }}")
+
+    def mock_get_templates_dir():
+        return templates_dir
+
+    monkeypatch.setattr(
+        "mystuff.commands.generate.get_templates_dir", mock_get_templates_dir
+    )
+
+    temp_output_dir.mkdir()
+
+    generate_lesson_pages(
+        temp_output_dir,
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+        },
+        "2026-03-29",
+    )
+
+    html_content = (temp_output_dir / "lessons" / "22" / "01.html").read_text()
+
+    assert 'href="../21/16.html"' in html_content
+    assert 'href="02.html"' in html_content
+    assert 'href="../21/16.html#key-insights"' in html_content
+    assert 'href="https://example.com/docs.md"' in html_content
+    assert 'href="mailto:test@example.com"' in html_content
+    assert 'href="#answers"' in html_content
+    assert 'href="../shared/README.md"' in html_content
+    assert str(temp_mystuff_dir) not in html_content
