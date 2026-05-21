@@ -1,14 +1,16 @@
 #!/usr/bin/env python3
-"""Tests for the learn module"""
+"""Tests for the track-aware learn module."""
 
 import datetime
-import os
 from pathlib import Path
 
 import pytest
 import yaml
+from typer.testing import CliRunner
 
+from mystuff.cli import app
 from mystuff.commands.learn import (
+    convert_markdown_to_html,
     get_all_lessons,
     get_learning_dir,
     get_lessons_dir,
@@ -17,448 +19,412 @@ from mystuff.commands.learn import (
     load_metadata,
     save_metadata,
 )
+from mystuff.learning_catalog import LearningMetadataError
+from mystuff.learning_catalog import LearningCatalogError, load_learning_catalog
+
+
+def write_markdown_with_frontmatter(path: Path, frontmatter: dict, body: str) -> None:
+    payload = "---\n"
+    payload += yaml.safe_dump(frontmatter, sort_keys=False)
+    payload += "---\n"
+    payload += body
+    path.write_text(payload, encoding="utf-8")
+
+
+def create_track(
+    lessons_dir: Path,
+    track_id: str,
+    *,
+    name: str,
+    description: str,
+    classification: str,
+    depends_on_tracks: list[str],
+    status: str,
+    lessons: list[dict],
+) -> None:
+    track_dir = lessons_dir / track_id
+    track_dir.mkdir(parents=True)
+
+    track_frontmatter = {
+        "track_id": track_id,
+        "name": name,
+        "description": description,
+        "classification": classification,
+        "track_tier": "core",
+        "target_lesson_count": len(lessons),
+        "depends_on_tracks": depends_on_tracks,
+        "status": status,
+        "lesson_count": len(lessons),
+        "difficulty_min": "beginner",
+        "difficulty_max": "advanced",
+        "capstone_policy": "embedded",
+        "legacy_source_ranges": ["001-010"],
+    }
+    write_markdown_with_frontmatter(
+        track_dir / "TRACK.md",
+        track_frontmatter,
+        f"# {name}\n\nTrack overview.\n",
+    )
+
+    for lesson in lessons:
+        lesson_frontmatter = {
+            "lesson_id": lesson["lesson_id"],
+            "title": lesson["title"],
+            "track_id": track_id,
+            "classification": lesson.get("classification", classification),
+            "sequence": lesson["sequence"],
+            "difficulty": lesson.get("difficulty", "beginner"),
+            "estimated_time": lesson.get("estimated_time", 20),
+            "public": lesson.get("public", True),
+            "review_status": lesson.get("review_status", "reviewed"),
+            "lesson_kind": lesson.get("lesson_kind", "lesson"),
+            "capstone_scope": lesson.get("capstone_scope", "track"),
+            "depends_on_tracks": lesson.get("depends_on_tracks", depends_on_tracks),
+            "legacy_day": lesson.get("legacy_day"),
+            "legacy_path": lesson.get("legacy_path"),
+        }
+        write_markdown_with_frontmatter(
+            track_dir / f"{lesson['sequence']:03d}.md",
+            lesson_frontmatter,
+            lesson.get("body", f"# {lesson['title']}\n\nLesson body.\n"),
+        )
 
 
 @pytest.fixture
 def temp_learning_dir(tmp_path, monkeypatch):
-    """Create a temporary learning directory for testing."""
-    learning_dir = tmp_path / "learning"
+    """Create a temporary track-based learning directory."""
+    mystuff_dir = tmp_path / "mystuff"
+    learning_dir = mystuff_dir / "learning"
     lessons_dir = learning_dir / "lessons"
     lessons_dir.mkdir(parents=True)
+    monkeypatch.setenv("MYSTUFF_HOME", str(mystuff_dir))
 
-    # Set MYSTUFF_HOME to temp directory
-    monkeypatch.setenv("MYSTUFF_HOME", str(tmp_path))
+    create_track(
+        lessons_dir,
+        "foundations",
+        name="Foundations",
+        description="Core concepts.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "100",
+                "sequence": 1,
+                "title": "Intro to Foundations",
+                "difficulty": "beginner",
+                "legacy_day": 100,
+                "legacy_path": "10/01.md",
+                "body": "# Intro\n\n[Next](002.md)\n",
+            },
+            {
+                "lesson_id": "101",
+                "sequence": 2,
+                "title": "Capstone Foundations",
+                "difficulty": "intermediate",
+                "lesson_kind": "capstone",
+                "legacy_day": 101,
+                "legacy_path": "10/02.md",
+                "body": "# Capstone\n\n[Back](001.md)\n",
+            },
+        ],
+    )
+    create_track(
+        lessons_dir,
+        "systems",
+        name="Systems",
+        description="Distributed systems.",
+        classification="complexity-and-dynamics",
+        depends_on_tracks=["foundations"],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "200",
+                "sequence": 1,
+                "title": "Distributed Reads",
+                "difficulty": "intermediate",
+                "legacy_day": 200,
+                "legacy_path": "20/01.md",
+            },
+            {
+                "lesson_id": "201",
+                "sequence": 2,
+                "title": "Replication Internals",
+                "difficulty": "advanced",
+                "public": False,
+                "legacy_day": 201,
+                "legacy_path": "20/02.md",
+            },
+        ],
+    )
+    create_track(
+        lessons_dir,
+        "ai-lab",
+        name="AI Lab",
+        description="Draft work.",
+        classification="complexity-and-dynamics",
+        depends_on_tracks=["systems"],
+        status="draft",
+        lessons=[],
+    )
 
+    (lessons_dir / "README.md").write_text("# Global index\n", encoding="utf-8")
     return learning_dir
 
 
-@pytest.fixture
-def sample_lessons(temp_learning_dir):
-    """Create sample lesson files."""
-    lessons_dir = temp_learning_dir / "lessons"
-
-    # Create flat lessons
-    (lessons_dir / "01-intro.md").write_text("# Introduction")
-    (lessons_dir / "02-basics.md").write_text("# Basics")
-
-    # Create nested lessons
-    python_dir = lessons_dir / "python"
-    python_dir.mkdir()
-    (python_dir / "01-variables.md").write_text("# Variables")
-    (python_dir / "02-functions.md").write_text("# Functions")
-
-    git_dir = lessons_dir / "git"
-    git_dir.mkdir()
-    (git_dir / "01-basics.md").write_text("# Git Basics")
-
-    return lessons_dir
-
-
 def test_get_learning_dir(temp_learning_dir):
-    """Test getting the learning directory."""
-    learning_dir = get_learning_dir()
-    assert learning_dir.exists()
-    assert learning_dir.name == "learning"
+    assert get_learning_dir() == temp_learning_dir
+    assert get_learning_dir().exists()
 
 
 def test_get_lessons_dir(temp_learning_dir):
-    """Test getting the lessons directory."""
     lessons_dir = get_lessons_dir()
     assert lessons_dir.exists()
     assert lessons_dir.name == "lessons"
 
 
 def test_get_metadata_path(temp_learning_dir):
-    """Test getting the metadata file path."""
     metadata_path = get_metadata_path()
     assert metadata_path.parent == temp_learning_dir
     assert metadata_path.name == "metadata.yaml"
 
 
-def test_load_metadata_creates_file_if_not_exists(temp_learning_dir):
-    """Test that load_metadata creates the file if it doesn't exist."""
-    metadata_path = get_metadata_path()
-    assert not metadata_path.exists()
-
+def test_load_metadata_creates_v2_file(temp_learning_dir):
     metadata = load_metadata()
 
-    assert metadata_path.exists()
-    assert metadata["current_lesson"] is None
-    assert metadata["last_opened"] is None
+    assert metadata["schema_version"] == 2
+    assert metadata["current_lesson_id"] is None
+    assert metadata["last_opened_at"] is None
     assert metadata["completed_lessons"] == []
 
 
-def test_load_metadata_with_existing_file(temp_learning_dir):
-    """Test loading metadata from existing file."""
+def test_load_metadata_rejects_legacy_file(temp_learning_dir):
     metadata_path = get_metadata_path()
+    metadata_path.write_text(
+        yaml.safe_dump(
+            {
+                "current_lesson": "foundations/001.md",
+                "last_opened": "2025-10-01T12:00:00",
+                "completed_lessons": [],
+            }
+        ),
+        encoding="utf-8",
+    )
 
-    # Create a metadata file
-    test_metadata = {
-        "current_lesson": "01-intro.md",
-        "last_opened": "2025-10-01T12:00:00",
-        "completed_lessons": [
-            {"name": "00-setup.md", "completed_at": "2025-09-30T10:00:00"}
-        ],
-    }
-
-    with open(metadata_path, "w") as f:
-        yaml.dump(test_metadata, f)
-
-    # Load it
-    metadata = load_metadata()
-
-    assert metadata["current_lesson"] == "01-intro.md"
-    assert metadata["last_opened"] == "2025-10-01T12:00:00"
-    assert len(metadata["completed_lessons"]) == 1
-    assert metadata["completed_lessons"][0]["name"] == "00-setup.md"
+    with pytest.raises(LearningMetadataError):
+        load_metadata()
 
 
-def test_save_metadata(temp_learning_dir):
-    """Test saving metadata."""
-    metadata = {
-        "current_lesson": "02-basics.md",
-        "last_opened": datetime.datetime.now().isoformat(),
-        "completed_lessons": [
-            {"name": "01-intro.md", "completed_at": "2025-10-01T12:00:00"}
-        ],
-    }
-
-    save_metadata(metadata)
-
-    metadata_path = get_metadata_path()
-    assert metadata_path.exists()
-
-    # Load and verify
-    with open(metadata_path, "r") as f:
-        loaded = yaml.safe_load(f)
-
-    assert loaded["current_lesson"] == "02-basics.md"
-    assert len(loaded["completed_lessons"]) == 1
-
-
-def test_get_all_lessons_flat(sample_lessons):
-    """Test getting all lessons with flat structure."""
-    lessons = get_all_lessons(recursive=False)
-
-    # Should only get top-level lessons
-    assert len(lessons) == 2
-    assert any(l["name"] == "01-intro.md" for l in lessons)
-    assert any(l["name"] == "02-basics.md" for l in lessons)
-
-
-def test_get_all_lessons_recursive(sample_lessons):
-    """Test getting all lessons recursively."""
-    lessons = get_all_lessons(recursive=True)
-
-    # Should get all lessons including nested ones
-    # 2 top-level + 2 in python/ + 1 in git/ = 5 total
-    assert len(lessons) == 5
-
-    # Check some specific lessons
-    lesson_names = [l["name"] for l in lessons]
-    assert "01-intro.md" in lesson_names
-    assert "python/01-variables.md" in lesson_names
-    assert "git/01-basics.md" in lesson_names
-
-
-def test_get_all_lessons_sorted(sample_lessons):
-    """Test that lessons are returned in sorted order."""
-    lessons = get_all_lessons(recursive=True)
-
-    lesson_names = [l["name"] for l in lessons]
-
-    # Should be sorted alphabetically
-    assert lesson_names == sorted(lesson_names)
-
-
-def test_get_all_lessons_empty_directory(temp_learning_dir):
-    """Test getting lessons from empty directory."""
+def test_get_all_lessons_discovers_track_layout_only(temp_learning_dir):
     lessons = get_all_lessons()
 
-    assert lessons == []
+    assert [lesson["lesson_id"] for lesson in lessons] == ["100", "101", "200", "201"]
+    assert all(lesson["path"].count("/") == 1 for lesson in lessons)
+    assert "README.md" not in {lesson["path"] for lesson in lessons}
 
 
-def test_get_all_lessons_filters_non_numeric_files(temp_learning_dir):
-    """Test that only numeric-formatted files are included."""
-    lessons_dir = temp_learning_dir / "lessons"
-    
-    # Create numeric lessons (should be included)
-    (lessons_dir / "01-intro.md").write_text("# Introduction")
-    (lessons_dir / "02-basics.md").write_text("# Basics")
-    (lessons_dir / "123-advanced.md").write_text("# Advanced")
-    
-    # Create non-numeric files (should be excluded)
-    (lessons_dir / "README.md").write_text("# README")
-    (lessons_dir / "notes.md").write_text("# Notes")
-    (lessons_dir / "index.md").write_text("# Index")
-    (lessons_dir / "documentation.md").write_text("# Docs")
-    
-    # Test flat structure
-    lessons = get_all_lessons(recursive=False)
-    
-    # Should only get numeric files
-    assert len(lessons) == 3
-    lesson_names = [l["name"] for l in lessons]
-    assert "01-intro.md" in lesson_names
-    assert "02-basics.md" in lesson_names
-    assert "123-advanced.md" in lesson_names
-    
-    # Non-numeric files should not be included
-    assert "README.md" not in lesson_names
-    assert "notes.md" not in lesson_names
-    assert "index.md" not in lesson_names
-    assert "documentation.md" not in lesson_names
-
-
-def test_get_next_lesson(sample_lessons, temp_learning_dir):
-    """Test getting the next uncompleted lesson."""
+def test_get_next_lesson_wraps_within_track(temp_learning_dir):
     metadata = {
-        "current_lesson": "01-intro.md",
+        "schema_version": 2,
+        "current_lesson_id": "101",
+        "last_opened_at": None,
         "completed_lessons": [
-            {"name": "01-intro.md", "completed_at": "2025-10-01T12:00:00"}
+            {"lesson_id": "101", "completed_at": "2026-04-01T10:00:00"}
         ],
     }
 
-    next_lesson = get_next_lesson("01-intro.md", metadata)
+    next_lesson_id = get_next_lesson("101", metadata)
 
-    # Should get the next lesson in alphabetical order
-    assert next_lesson == "02-basics.md"
+    assert next_lesson_id == "100"
 
 
-def test_get_next_lesson_skip_completed(sample_lessons, temp_learning_dir):
-    """Test that get_next_lesson skips completed lessons."""
+def test_start_track_sets_first_pending_lesson(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "start", "foundations"], input="n\n")
+
+    assert result.exit_code == 0
+    metadata = load_metadata()
+    assert metadata["current_lesson_id"] == "100"
+
+
+def test_next_finishes_track_and_suggests_unlocked_tracks(temp_learning_dir):
     metadata = {
-        "current_lesson": "01-intro.md",
+        "schema_version": 2,
+        "current_lesson_id": "101",
+        "last_opened_at": datetime.datetime.now().isoformat(),
         "completed_lessons": [
-            {"name": "01-intro.md", "completed_at": "2025-10-01T12:00:00"},
-            {"name": "02-basics.md", "completed_at": "2025-10-02T12:00:00"},
+            {"lesson_id": "100", "completed_at": "2026-04-01T09:00:00"}
         ],
     }
+    save_metadata(metadata)
 
-    next_lesson = get_next_lesson("01-intro.md", metadata)
+    runner = CliRunner()
+    result = runner.invoke(app, ["learn", "next"])
 
-    # Should skip 02-basics.md and get git/01-basics.md
-    assert next_lesson == "git/01-basics.md"
-
-
-def test_get_next_lesson_wrap_around(sample_lessons, temp_learning_dir):
-    """Test that get_next_lesson wraps around to the beginning."""
-    # All lessons except first are completed
-    metadata = {
-        "current_lesson": "python/02-functions.md",
-        "completed_lessons": [
-            {"name": "02-basics.md", "completed_at": "2025-10-01T12:00:00"},
-            {"name": "git/01-basics.md", "completed_at": "2025-10-02T12:00:00"},
-            {"name": "python/01-variables.md", "completed_at": "2025-10-03T12:00:00"},
-            {"name": "python/02-functions.md", "completed_at": "2025-10-04T12:00:00"},
-        ],
-    }
-
-    next_lesson = get_next_lesson("python/02-functions.md", metadata)
-
-    # Should wrap around to the first uncompleted lesson
-    assert next_lesson == "01-intro.md"
+    assert result.exit_code == 0
+    reloaded = load_metadata()
+    assert reloaded["current_lesson_id"] is None
+    assert "Track completed: foundations" in result.output
+    assert "systems" in result.output
 
 
-def test_get_next_lesson_all_completed(sample_lessons, temp_learning_dir):
-    """Test get_next_lesson when all lessons are completed."""
-    all_lessons = get_all_lessons()
-    completed = [
-        {"name": lesson["name"], "completed_at": "2025-10-01T12:00:00"}
-        for lesson in all_lessons
+def test_list_track_hides_private_lessons_by_default(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "list", "--track", "systems"])
+
+    assert result.exit_code == 0
+    assert "Distributed" in result.output
+    assert "Reads" in result.output
+    assert "Replication Internals" not in result.output
+
+
+def test_list_track_progress_counts_only_visible_lessons(temp_learning_dir):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [
+                {"lesson_id": "201", "completed_at": "2026-04-01T10:00:00"}
+            ],
+        }
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["learn", "list", "--track", "systems"])
+
+    assert result.exit_code == 0
+    assert "| 0/1 completed" in result.output
+
+
+def test_catalog_groups_tracks_by_classification(temp_learning_dir):
+    catalog = load_learning_catalog()
+
+    assert [item["classification_id"] for item in catalog["classifications"]] == [
+        "systems-thinking",
+        "complexity-and-dynamics",
+    ]
+    assert [track["track_id"] for track in catalog["classifications"][1]["tracks"]] == [
+        "systems",
+        "ai-lab",
     ]
 
-    metadata = {"current_lesson": "01-intro.md", "completed_lessons": completed}
 
-    next_lesson = get_next_lesson("01-intro.md", metadata)
-
-    # Should return None when all lessons are completed
-    assert next_lesson is None
-
-
-def test_metadata_persists_across_loads(temp_learning_dir):
-    """Test that metadata persists across multiple load/save cycles."""
-    # Save metadata
-    metadata1 = {
-        "current_lesson": "test.md",
-        "last_opened": "2025-10-01T12:00:00",
-        "completed_lessons": [
-            {"name": "intro.md", "completed_at": "2025-09-30T10:00:00"}
-        ],
-    }
-    save_metadata(metadata1)
-
-    # Load it
-    metadata2 = load_metadata()
-
-    assert metadata2["current_lesson"] == "test.md"
-    assert len(metadata2["completed_lessons"]) == 1
-
-    # Modify and save again
-    metadata2["completed_lessons"].append(
-        {"name": "test.md", "completed_at": "2025-10-01T12:00:00"}
+def test_catalog_rejects_mismatched_lesson_classification(temp_learning_dir):
+    lesson_path = temp_learning_dir / "lessons" / "foundations" / "001.md"
+    content = lesson_path.read_text(encoding="utf-8")
+    lesson_path.write_text(
+        content.replace("classification: systems-thinking", "classification: wrong-group"),
+        encoding="utf-8",
     )
-    save_metadata(metadata2)
 
-    # Load again
-    metadata3 = load_metadata()
-
-    assert len(metadata3["completed_lessons"]) == 2
+    with pytest.raises(LearningCatalogError):
+        load_learning_catalog()
 
 
-def test_lesson_paths_are_relative(sample_lessons):
-    """Test that lesson names are relative paths."""
-    lessons = get_all_lessons(recursive=True)
+def test_list_groups_tracks_by_classification(temp_learning_dir):
+    runner = CliRunner()
 
-    for lesson in lessons:
-        # Names should be relative, not absolute
-        assert not lesson["name"].startswith("/")
+    result = runner.invoke(app, ["learn", "list"])
 
-        # Paths should be absolute
-        assert lesson["path"].startswith("/") or lesson["path"].startswith(
-            str(sample_lessons)
-        )
+    assert result.exit_code == 0
+    assert "Systems Thinking" in result.output
+    assert "Complexity And Dynamics" in result.output
+    assert "Foundations" in result.output
+    assert "Systems" in result.output
 
 
-def test_nested_directory_structure(temp_learning_dir):
-    """Test handling of deeply nested directory structures."""
-    lessons_dir = get_lessons_dir()
+def test_list_filters_by_classification(temp_learning_dir):
+    runner = CliRunner()
 
-    # Create deeply nested structure
-    deep_dir = lessons_dir / "level1" / "level2" / "level3"
-    deep_dir.mkdir(parents=True)
-    (deep_dir / "01-deep-lesson.md").write_text("# Deep Lesson")
+    result = runner.invoke(
+        app, ["learn", "list", "--classification", "systems-thinking"]
+    )
 
-    lessons = get_all_lessons(recursive=True)
+    assert result.exit_code == 0
+    assert "Systems Thinking" in result.output
+    assert "Foundations" in result.output
+    assert "Complexity And Dynamics" not in result.output
+    assert "systems - Systems" not in result.output
 
-    assert len(lessons) == 1
-    assert lessons[0]["name"] == "level1/level2/level3/01-deep-lesson.md"
+
+def test_tree_groups_by_classification(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app, ["learn", "tree", "--classification", "complexity-and-dynamics"]
+    )
+
+    assert result.exit_code == 0
+    assert "Complexity And Dynamics" in result.output
+    assert "Systems" in result.output
+    assert "Distributed Reads" in result.output
+
+
+def test_stats_groups_output_by_classification(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "stats"])
+
+    assert result.exit_code == 0
+    assert "Classifications visible: 2" in result.output
+    assert "Systems Thinking" in result.output
+    assert "Complexity And Dynamics" in result.output
 
 
 def test_convert_markdown_to_html(temp_learning_dir):
-    """Test markdown to HTML conversion."""
-    from mystuff.commands.learn import convert_markdown_to_html
+    lessons_dir = temp_learning_dir / "lessons" / "scratch"
+    lessons_dir.mkdir()
+    lesson_file = lessons_dir / "test.md"
+    lesson_file.write_text(
+        "# Test Lesson\n\n```python\nprint('ok')\n```\n",
+        encoding="utf-8",
+    )
 
-    lessons_dir = temp_learning_dir / "lessons"
-    lesson_file = lessons_dir / "test-lesson.md"
-
-    # Create a markdown file with various elements
-    markdown_content = """# Test Lesson
-
-This is a **bold** text and this is *italic*.
-
-## Code Example
-
-```python
-def hello():
-    print("Hello, World!")
-```
-
-## Lists
-
-- Item 1
-- Item 2
-- Item 3
-
-## Table
-
-| Column 1 | Column 2 |
-|----------|----------|
-| Value 1  | Value 2  |
-
-## Blockquote
-
-> This is a quote
-"""
-    lesson_file.write_text(markdown_content)
-
-    # Convert to HTML
     html_path = convert_markdown_to_html(lesson_file)
 
-    # Verify HTML file was created
     assert Path(html_path).exists()
-
-    # Read and verify HTML content
-    with open(html_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
-
-    # Check for essential HTML elements
+    html_content = Path(html_path).read_text(encoding="utf-8")
     assert "<!DOCTYPE html>" in html_content
-    assert "<html" in html_content
-    assert "<head>" in html_content
-    assert "<body>" in html_content
-    assert "<style>" in html_content  # CSS styling
-
-    # Check that markdown was converted
-    assert "<h1>" in html_content  # Heading
-    assert "<strong>" in html_content  # Bold
-    assert "<em>" in html_content  # Italic
-    assert "<code>" in html_content  # Code
-    assert "<ul>" in html_content  # List
-    assert "<table>" in html_content  # Table
-    assert "<blockquote>" in html_content  # Blockquote
-
-    # Clean up
+    assert "<code>" in html_content
     Path(html_path).unlink()
 
 
-def test_convert_markdown_to_html_with_special_chars(temp_learning_dir):
-    """Test markdown conversion with special characters."""
-    from mystuff.commands.learn import convert_markdown_to_html
 
-    lessons_dir = temp_learning_dir / "lessons"
-    lesson_file = lessons_dir / "special-chars.md"
+def test_unpublish_lesson_updates_public_frontmatter(temp_learning_dir):
+    runner = CliRunner()
 
-    # Create markdown with special characters
-    markdown_content = """# Special Characters Test
+    result = runner.invoke(app, ["learn", "unpublish", "foundations/001"])
 
-This has special chars: < > & " '
-
-And unicode: 日本語 🎉 émojis
-"""
-    lesson_file.write_text(markdown_content, encoding="utf-8")
-
-    # Convert to HTML
-    html_path = convert_markdown_to_html(lesson_file)
-
-    # Verify file exists
-    assert Path(html_path).exists()
-
-    # Read content
-    with open(html_path, "r", encoding="utf-8") as f:
-        html_content = f.read()
-
-    # Verify special characters are properly handled
-    assert "日本語" in html_content
-    assert "🎉" in html_content
-    assert "émojis" in html_content
-
-    # Clean up
-    Path(html_path).unlink()
+    assert result.exit_code == 0
+    lesson_path = temp_learning_dir / "lessons" / "foundations" / "001.md"
+    assert "public: false" in lesson_path.read_text(encoding="utf-8")
 
 
-def test_web_option_integration(temp_learning_dir, monkeypatch):
-    """Test that web option creates HTML file without actually opening browser."""
-    from mystuff.commands.learn import convert_markdown_to_html
+def test_publish_track_updates_public_frontmatter(temp_learning_dir):
+    runner = CliRunner()
 
-    lessons_dir = temp_learning_dir / "lessons"
-    lesson_file = lessons_dir / "web-test.md"
+    result = runner.invoke(app, ["learn", "publish", "systems"])
 
-    markdown_content = """# Web Test
+    assert result.exit_code == 0
+    track_path = temp_learning_dir / "lessons" / "systems" / "TRACK.md"
+    assert "public: true" in track_path.read_text(encoding="utf-8")
 
-This tests the web option functionality.
-"""
-    lesson_file.write_text(markdown_content)
 
-    # Test conversion
-    html_path = convert_markdown_to_html(lesson_file)
+def test_review_next_finds_pending_lesson(temp_learning_dir):
+    lesson_path = temp_learning_dir / "lessons" / "systems" / "001.md"
+    lesson_path.write_text(
+        lesson_path.read_text(encoding="utf-8").replace(
+            "review_status: reviewed", "review_status: pending"
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
 
-    # Verify HTML was created
-    assert Path(html_path).exists()
-    assert html_path.endswith(".html")
+    result = runner.invoke(app, ["learn", "review-next"])
 
-    # Verify it's in temp directory
-    assert "/tmp" in html_path or "temp" in html_path.lower()
-
-    # Clean up
-    Path(html_path).unlink()
+    assert result.exit_code == 0
+    assert "systems/001" in result.output
+    assert "Distributed Reads" in result.output

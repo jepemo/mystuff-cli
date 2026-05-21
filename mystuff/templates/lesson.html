@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-skin="clean" data-theme="system">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@{{ author }}</title>
+    <title>{{ lesson_title }} - @{{ author }}</title>
     <link rel="shortcut icon" href="{{ relative_root }}favicon.ico" />
     <link rel="stylesheet" href="{{ relative_root }}css/style.css" />
+      <script src="{{ relative_root|default('') }}js/site.js" defer></script>
   </head>
   <body>
     <h1>{{ lesson_title }}</h1>
@@ -13,32 +14,75 @@
     <nav>
       <a href="{{ relative_root }}index.html">Home</a> |
       <a href="{{ relative_root }}learning.html">Learning</a> |
-      <a href="{{ relative_root }}links.html">Links</a>{% if menu_items %}{% for item in menu_items %} | 
+      <a href="{{ relative_root }}links.html">Links</a>{% if menu_items %}{% for item in menu_items %} |
       <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
     </nav>
 
-    <main>
-      {{ lesson_content|safe }}
+    <main class="lesson-page">
+      <section class="stack-block">
+        <p class="breadcrumb">
+          <a href="{{ relative_root }}learning.html">Learning</a>
+          /
+          <a href="{{ classification_page_url }}">{{ classification.classification_name }}</a>
+          /
+          <a href="{{ track_page_url }}">{{ track.name }}</a>
+          /
+          {{ lesson.sequence_label }}
+        </p>
+        <p class="page-kicker">LESSON</p>
+        <p><a href="{{ track_page_url }}">{{ track.name }}</a></p>
+        <div class="meta-strip">
+          <span class="meta-chip">{{ lesson.sequence_label }}</span>
+          <span class="meta-chip">{{ lesson.estimated_time or '-' }} min</span>
+          <span class="meta-chip">{{ lesson.difficulty or '-' }}</span>
+          {% if lesson.lesson_kind != 'lesson' %}
+          <span class="meta-chip">{{ lesson.lesson_kind|replace('_', ' ')|upper }}</span>
+          {% endif %}
+        </div>
+      </section>
 
-      {% if prev_lesson or next_lesson %}
-      <hr>
-      <nav>
+      <section class="stack-block lesson-content-shell">
+        {{ lesson_content|safe }}
+      </section>
+
+      <section class="lesson-navigation-grid">
         {% if prev_lesson %}
-        <p><a href="{{ prev_lesson.url }}">← Previous: {{ prev_lesson.title }}</a></p>
+        <a class="nav-card" href="{{ prev_lesson.url }}">
+          <span class="page-kicker">PREVIOUS</span>
+          <strong>{{ prev_lesson.title }}</strong>
+        </a>
+        {% else %}
+        <div class="nav-card nav-card-disabled">
+          <span class="page-kicker">PREVIOUS</span>
+          <strong>Start of track</strong>
+        </div>
         {% endif %}
-        {% if next_lesson %}
-        <p><a href="{{ next_lesson.url }}">→ Next: {{ next_lesson.title }}</a></p>
-        {% endif %}
-      </nav>
-      {% endif %}
 
-      <hr>
-      <p><a href="{{ relative_root }}learning.html">← Back to Learning</a></p>
+        {% if next_lesson %}
+        <a class="nav-card" href="{{ next_lesson.url }}">
+          <span class="page-kicker">NEXT</span>
+          <strong>{{ next_lesson.title }}</strong>
+        </a>
+        {% else %}
+        <div class="nav-card nav-card-disabled">
+          <span class="page-kicker">NEXT</span>
+          <strong>End of track</strong>
+        </div>
+        {% endif %}
+      </section>
+
+      <section class="stack-block">
+        <p><a href="{{ track_page_url }}">← Back to {{ track.name }}</a></p>
+        <p><a href="{{ relative_root }}learning.html">← Back to Learning Hub</a></p>
+      </section>
     </main>
 
-    <hr>
+    <hr />
     <footer>
-        <p>Generated on {{ generated_at }} | @{{ author }} | Built with <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a></p>
+      <p>
+        Generated on {{ generated_at }} | @{{ author }} | Built with
+        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
+      </p>
     </footer>
   </body>
 </html>

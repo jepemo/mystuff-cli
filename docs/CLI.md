@@ -538,6 +538,91 @@ mystuff list import [OPTIONS]
 
 ---
 
+### `mystuff learn`
+
+Manage track-based learning content and progress.
+
+Track layout:
+
+```text
+learning/
+  lessons/
+    README.md
+    <track_id>/
+      TRACK.md
+      001.md
+      002.md
+```
+
+Track metadata is loaded from each `TRACK.md`. Lesson metadata is loaded from
+the frontmatter of each `001.md`, `002.md`, and so on. The catalog groups
+content by `classification`, so the default navigation is
+`classification -> track -> lesson`.
+
+#### `mystuff learn list`
+
+List visible classifications and tracks, or lessons inside a specific track.
+
+```bash
+mystuff learn list [OPTIONS]
+```
+
+**Options:**
+
+- `--track TEXT`: List lessons inside a specific track
+- `--classification TEXT`: Filter to a specific classification slug
+- `--completed, -c`: Show only completed tracks or lessons
+- `--pending, -p`: Show only pending tracks or lessons
+- `--difficulty, -d TEXT`: Filter by lesson difficulty
+- `--tree, -t`: Render the catalog as a tree
+- `--include-drafts`: Include draft tracks
+- `--include-private`: Include private lessons
+
+#### `mystuff learn start`
+
+Start or resume a track, lesson path, or lesson id.
+
+```bash
+mystuff learn start [OPTIONS] [LESSON]
+```
+
+**Examples:**
+
+```bash
+mystuff learn start foundations
+mystuff learn start foundations/001
+mystuff learn start 438
+```
+
+When you pass a track id, `mystuff learn start` resumes that track from the
+first pending lesson.
+
+#### `mystuff learn current`
+
+Open the current lesson in your editor or published website.
+
+```bash
+mystuff learn current [--web]
+```
+
+#### `mystuff learn next`
+
+Complete the current lesson and move to the next pending lesson in the same track.
+
+```bash
+mystuff learn next [--web]
+```
+
+#### `mystuff learn stats`
+
+Show track and lesson progress statistics.
+
+```bash
+mystuff learn stats [--include-drafts] [--include-private]
+```
+
+---
+
 ### `mystuff sync`
 
 Execute custom sync commands from configuration.
@@ -590,6 +675,9 @@ After running `mystuff init`, your directory will contain:
 ├── wiki/                # Wiki notes (Markdown)
 ├── eval/                # Evaluation entries (YAML)
 ├── lists/               # Lists (YAML)
+├── learning/
+│   ├── lessons/         # Tracks and lesson markdown
+│   └── metadata.yaml    # Learning progress (schema v2)
 └── config.yaml          # Configuration file
 ```
 
@@ -608,6 +696,10 @@ settings:
 sync:
   commands:
     - echo "Sync data"
+generate:
+  web:
+    output: "~/mystuff_web"
+    url: "https://example.com/mystuff"
 ```
 
 ### Environment Variables

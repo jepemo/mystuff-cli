@@ -4,6 +4,7 @@ MyStuff CLI - Learning management functionality
 """
 import datetime
 import os
+import re
 import tempfile
 import webbrowser
 from pathlib import Path
@@ -16,42 +17,30 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
-learn_app = typer.Typer(help="Manage learning materials and progress")
+from mystuff.learning_catalog import (
+    METADATA_TEMPLATE_V2,
+    LearningCatalogError,
+    LearningReferenceError,
+    attach_progress,
+    get_all_lessons as catalog_get_all_lessons,
+    get_completed_lesson_ids,
+    get_current_lesson,
+    get_learning_dir,
+    get_lessons_dir,
+    get_metadata_path,
+    get_mystuff_dir,
+    get_next_lesson as catalog_get_next_lesson,
+    is_track_completed,
+    load_learning_catalog,
+    load_metadata,
+    resolve_lesson_reference,
+    resolve_track_reference,
+    save_metadata,
+    track_status_summary,
+)
 
-# Reuse frontmatter extraction from generate module
-from mystuff.commands.generate import extract_frontmatter
-
-# Template for metadata
-METADATA_TEMPLATE = {
-    "current_lesson": None,
-    "last_opened": None,
-    "completed_lessons": [],
-}
-
-
-def get_mystuff_dir() -> Path:
-    """Get the mystuff directory path."""
-    mystuff_home = os.getenv("MYSTUFF_HOME")
-    if mystuff_home:
-        return Path(mystuff_home)
-
-    # Fallback to ~/.mystuff
-    return Path.home() / ".mystuff"
-
-
-def get_learning_dir() -> Path:
-    """Get the learning directory path."""
-    return get_mystuff_dir() / "learning"
-
-
-def get_lessons_dir() -> Path:
-    """Get the lessons directory path."""
-    return get_learning_dir() / "lessons"
-
-
-def get_metadata_path() -> Path:
-    """Get the metadata file path."""
-    return get_learning_dir() / "metadata.yaml"
+learn_app = typer.Typer(help="Manage learning tracks and progress")
+METADATA_TEMPLATE = dict(METADATA_TEMPLATE_V2)
 
 
 def load_config() -> Dict[str, Any]:
@@ -80,59 +69,6 @@ def load_config() -> Dict[str, Any]:
     return config
 
 
-def ensure_learning_structure() -> None:
-    """Ensure learning directory structure exists."""
-    learning_dir = get_learning_dir()
-    lessons_dir = get_lessons_dir()
-
-    # Create directories if they don't exist
-    learning_dir.mkdir(parents=True, exist_ok=True)
-    lessons_dir.mkdir(parents=True, exist_ok=True)
-
-
-def load_metadata() -> Dict[str, Any]:
-    """Load learning metadata. Creates file if it doesn't exist."""
-    ensure_learning_structure()
-    metadata_path = get_metadata_path()
-
-    if not metadata_path.exists():
-        # Create metadata file with template
-        metadata = METADATA_TEMPLATE.copy()
-        save_metadata(metadata)
-        return metadata
-
-    try:
-        with open(metadata_path, "r", encoding="utf-8") as f:
-            metadata = yaml.safe_load(f)
-
-        # Ensure all required keys exist
-        if metadata is None:
-            metadata = {}
-
-        for key in METADATA_TEMPLATE:
-            if key not in metadata:
-                metadata[key] = METADATA_TEMPLATE[key]
-
-        return metadata
-    except yaml.YAMLError as e:
-        typer.echo(f"❌ Error parsing metadata.yaml: {e}", err=True)
-        return METADATA_TEMPLATE.copy()
-    except Exception as e:
-        typer.echo(f"❌ Error reading metadata.yaml: {e}", err=True)
-        return METADATA_TEMPLATE.copy()
-
-
-def save_metadata(metadata: Dict[str, Any]) -> None:
-    """Save learning metadata. Creates file if it doesn't exist."""
-    ensure_learning_structure()
-    metadata_path = get_metadata_path()
-
-    try:
-        with open(metadata_path, "w", encoding="utf-8") as f:
-            yaml.dump(metadata, f, default_flow_style=False, sort_keys=False)
-    except Exception as e:
-        typer.echo(f"❌ Error saving metadata: {e}", err=True)
-        raise typer.Exit(1)
 
 
 def get_css_theme(theme: str = "default") -> str:
@@ -748,539 +684,965 @@ def convert_markdown_to_html(markdown_path: Path, theme: str = "default") -> str
     return temp_path
 
 
-def is_numeric_lesson(filename: str) -> bool:
-    """Check if a filename follows the numeric lesson format (e.g., 01.md, 02.md).
-    
-    Args:
-        filename: The filename to check (e.g., "01.md" or "lesson.md")
-            
-    Returns:
-        True if the filename starts with digits, False otherwise
+def get_all_lessons(recursive: bool = True) -> List[Dict[str, Any]]:
+    """Return all lessons in global order.
+
+    The recursive flag is kept for backward compatibility and ignored.
     """
-    import re
-    # Match filenames that start with one or more digits followed by optional text and .md
-    # Examples: 01.md, 02-intro.md, 123-advanced.md
-    pattern = r'^\d+'
-    return bool(re.match(pattern, filename))
+    _ = recursive
+    return catalog_get_all_lessons()
 
 
-def get_all_lessons(recursive: bool = True) -> List[Dict[str, str]]:
-    """Get all lessons with their metadata.
-    
-    Only includes lessons with numeric filenames (e.g., 01.md, 02.md, 03-intro.md).
-
-    Args:
-        recursive: Whether to search recursively through subdirectories
-
-    Returns:
-        List of lesson objects with name, path, and display_name
-    """
-    lessons_dir = get_lessons_dir()
-
-    if not lessons_dir.exists():
-        return []
-
-    lessons = []
-
-    if recursive:
-        # Recursive search through all subdirectories
-        for file_path in sorted(lessons_dir.glob("**/*.md")):
-            if file_path.is_file() and is_numeric_lesson(file_path.name):
-                # Get relative path from lessons directory
-                rel_path = file_path.relative_to(lessons_dir)
-
-                # Build display name from frontmatter if available
-                display_name = str(rel_path)
-                general_topic = None
-                difficulty = None
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    frontmatter, _ = extract_frontmatter(content)
-                    if frontmatter:
-                        lesson_number = frontmatter.get("lesson_number")
-                        lesson_title = frontmatter.get("lesson_title")
-                        lesson_topic = frontmatter.get("topic")
-                        general_topic = frontmatter.get("general_topic")
-                        difficulty = frontmatter.get("difficulty")
-                        if lesson_number and lesson_title:
-                            display_name = f"{lesson_number}: {lesson_title}"
-                            if lesson_topic:
-                                display_name = f"{display_name} ({lesson_topic})"
-                except Exception:
-                    pass
-
-                # Create lesson object
-                lesson = {
-                    "name": str(rel_path),  # Relative path as string
-                    "path": str(file_path),  # Full path as string
-                    "display_name": display_name,
-                    "general_topic": general_topic,
-                    "difficulty": difficulty,
-                }
-                lessons.append(lesson)
-    else:
-        # Only top-level lessons
-        for file_path in sorted(lessons_dir.glob("*.md")):
-            if file_path.is_file() and is_numeric_lesson(file_path.name):
-                # Build display name from frontmatter if available
-                display_name = file_path.name
-                general_topic = None
-                difficulty = None
-                try:
-                    with open(file_path, "r", encoding="utf-8") as f:
-                        content = f.read()
-                    frontmatter, _ = extract_frontmatter(content)
-                    if frontmatter:
-                        lesson_number = frontmatter.get("lesson_number")
-                        lesson_title = frontmatter.get("lesson_title")
-                        lesson_topic = frontmatter.get("topic")
-                        general_topic = frontmatter.get("general_topic")
-                        difficulty = frontmatter.get("difficulty")
-                        if lesson_number and lesson_title:
-                            display_name = f"{lesson_number}: {lesson_title}"
-                            if lesson_topic:
-                                display_name = f"{display_name} ({lesson_topic})"
-                except Exception:
-                    pass
-
-                lesson = {
-                    "name": file_path.name,
-                    "path": str(file_path),
-                    "display_name": display_name,
-                    "general_topic": general_topic,
-                    "difficulty": difficulty,
-                }
-                lessons.append(lesson)
-
-    # Sort lessons alphabetically by name
-    return sorted(lessons, key=lambda lesson: lesson["name"])
+def get_next_lesson(
+    current_lesson_id: str, metadata: Dict[str, Any]
+) -> Optional[str]:
+    """Return the next pending lesson id within the same track."""
+    next_lesson = catalog_get_next_lesson(current_lesson_id, metadata)
+    return next_lesson["lesson_id"] if next_lesson else None
 
 
-def get_lesson_status(lesson_name: str, metadata: Dict[str, Any]) -> str:
-    """Get the status icon for a lesson."""
-    completed_names = [
-        item["name"] for item in metadata.get("completed_lessons", [])
-    ]
-    current = metadata.get("current_lesson")
+def _load_catalog_or_exit() -> Dict[str, Any]:
+    try:
+        return load_learning_catalog()
+    except LearningCatalogError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
 
-    if lesson_name in completed_names:
+
+def _load_metadata_or_exit() -> Dict[str, Any]:
+    try:
+        return load_metadata()
+    except LearningCatalogError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
+
+
+def _save_metadata_or_exit(metadata: Dict[str, Any]) -> None:
+    try:
+        save_metadata(metadata)
+    except LearningCatalogError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
+
+
+def _attach_progress_or_exit(
+    catalog: Dict[str, Any], metadata: Dict[str, Any]
+) -> Dict[str, Any]:
+    try:
+        return attach_progress(catalog, metadata)
+    except LearningCatalogError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
+
+
+def _track_icon(track: Dict[str, Any]) -> str:
+    status = track.get("progress_status")
+    if status == "done":
         return "✅"
-    elif lesson_name == current:
+    if status == "in_progress":
         return "🔍"
-    else:
-        return "⏳"
+    if status == "locked":
+        return "🔒"
+    return "⏳"
 
 
-def display_lessons_tree(
-    lessons: List[Dict[str, str]], metadata: Dict[str, Any]
-) -> None:
-    """Display lessons in a tree structure."""
-    console = Console()
+def _lesson_icon(lesson: Dict[str, Any]) -> str:
+    status = lesson.get("progress_status")
+    if status == "done":
+        return "✅"
+    if status == "current":
+        return "🔍"
+    return "⏳"
 
-    if not lessons:
-        console.print("❌ No lessons found.")
-        return
 
-    # Group lessons by directory
-    lesson_tree: Dict[str, List[Dict[str, str]]] = {}
-    for lesson in lessons:
-        parts = lesson["name"].split("/")
+def _classification_display_name(classification: Dict[str, Any]) -> str:
+    return classification.get("classification_name") or classification["classification_id"]
 
-        if len(parts) == 1:
-            # Top-level lesson
-            if "_root" not in lesson_tree:
-                lesson_tree["_root"] = []
-            lesson_tree["_root"].append(lesson)
-        else:
-            # Nested lesson - group by parent directory
-            directory = "/".join(parts[:-1])
-            if directory not in lesson_tree:
-                lesson_tree[directory] = []
-            lesson_tree[directory].append(lesson)
 
-    # Create tree
-    root = Tree("📚 Lessons")
+def _track_status_badge(track: Dict[str, Any]) -> str:
+    status = track.get("progress_status")
+    if status == "done":
+        return "[DONE]"
+    if status == "in_progress":
+        return "[CONTINUE]"
+    if status == "locked":
+        return "[LOCKED]"
+    return "[START]"
 
-    # Add top-level lessons
-    if "_root" in lesson_tree:
-        for lesson in lesson_tree["_root"]:
-            status = get_lesson_status(lesson["name"], metadata)
-            display_label = lesson.get("display_name", lesson["name"])
-            root.add(f"{status} {display_label}")
 
-    # Add directories and their lessons
-    for directory, dir_lessons in sorted(lesson_tree.items()):
-        if directory == "_root":
+def _track_difficulty_label(track: Dict[str, Any]) -> str:
+    values = [
+        value
+        for value in [track.get("difficulty_min"), track.get("difficulty_max")]
+        if value
+    ]
+    if not values:
+        return "-"
+    if len(values) == 2 and values[0] != values[1]:
+        return f"{values[0]} -> {values[1]}"
+    return values[0]
+
+
+def _track_progress_label(track: Dict[str, Any], include_private: bool = False) -> str:
+    visible_lessons = _visible_lessons(track, include_private=include_private)
+    lesson_total = len(visible_lessons)
+    if lesson_total == 0:
+        return "0/0"
+    completed_visible = sum(
+        1 for lesson in visible_lessons if lesson.get("progress_status") == "done"
+    )
+    return f"{completed_visible}/{lesson_total}"
+
+
+def _lesson_kind_badge(lesson: Dict[str, Any]) -> str:
+    kind = lesson.get("lesson_kind") or "lesson"
+    if kind == "lesson":
+        return ""
+    return f" [{kind.replace('_', ' ').upper()}]"
+
+
+def _visible_tracks(
+    catalog: Dict[str, Any], include_drafts: bool = False
+) -> List[Dict[str, Any]]:
+    tracks = catalog["tracks"]
+    if include_drafts:
+        return list(tracks)
+    return [track for track in tracks if track["status"] != "draft"]
+
+
+def _visible_lessons(
+    track: Dict[str, Any], include_private: bool = False
+) -> List[Dict[str, Any]]:
+    lessons = track["lessons"]
+    if include_private:
+        return list(lessons)
+    return [lesson for lesson in lessons if lesson["public"]]
+
+
+def _visible_classifications(
+    catalog: Dict[str, Any],
+    *,
+    include_drafts: bool = False,
+    include_private: bool = False,
+    classification_id: Optional[str] = None,
+    completed: bool = False,
+    pending: bool = False,
+    difficulty: Optional[str] = None,
+) -> List[Dict[str, Any]]:
+    classifications = []
+    for classification in catalog.get("classifications", []):
+        if classification_id and classification["classification_id"] != classification_id:
             continue
 
-        # Create directory node
-        dir_node = root.add(f"📁 {directory}")
+        tracks = []
+        lesson_count = 0
+        for track in classification["tracks"]:
+            if not include_drafts and track["status"] == "draft":
+                continue
+            visible_lessons = _visible_lessons(track, include_private=include_private)
+            if not _track_matches_filters(
+                track, visible_lessons, completed, pending, difficulty
+            ):
+                continue
+            tracks.append(track)
+            lesson_count += len(visible_lessons)
 
-        # Add lessons in this directory
-        for lesson in sorted(dir_lessons, key=lambda item: item["name"]):
-            display_label = lesson.get("display_name", lesson["name"].split("/")[-1])
-            status = get_lesson_status(lesson["name"], metadata)
-            dir_node.add(f"{status} {display_label}")
+        if not tracks:
+            continue
+
+        classifications.append(
+            {
+                "classification_id": classification["classification_id"],
+                "classification_name": _classification_display_name(classification),
+                "tracks": tracks,
+                "track_count": len(tracks),
+                "lesson_count": lesson_count,
+            }
+        )
+
+    return classifications
+
+
+def _lesson_matches_filters(
+    lesson: Dict[str, Any],
+    completed_lesson_ids: set,
+    current_lesson_id: Optional[str],
+    completed: bool,
+    pending: bool,
+    difficulty: Optional[str],
+) -> bool:
+    if completed and lesson["lesson_id"] not in completed_lesson_ids:
+        return False
+    if pending and lesson["lesson_id"] in completed_lesson_ids:
+        return False
+    if difficulty and (lesson.get("difficulty") or "").lower() != difficulty.lower():
+        return False
+    if lesson["lesson_id"] == current_lesson_id:
+        lesson["progress_status"] = "current"
+    elif lesson["lesson_id"] in completed_lesson_ids:
+        lesson["progress_status"] = "done"
+    else:
+        lesson["progress_status"] = "todo"
+    return True
+
+
+def _track_matches_filters(
+    track: Dict[str, Any],
+    visible_lessons: List[Dict[str, Any]],
+    completed: bool,
+    pending: bool,
+    difficulty: Optional[str],
+) -> bool:
+    if completed and track["progress_status"] != "done":
+        return False
+    if pending and track["progress_status"] == "done":
+        return False
+    if difficulty and not any(
+        (lesson.get("difficulty") or "").lower() == difficulty.lower()
+        for lesson in visible_lessons
+    ):
+        return False
+    return True
+
+
+def _track_display_name(track: Dict[str, Any]) -> str:
+    return f"{track['track_id']} - {track['name']}"
+
+
+def _track_lock_message(track: Dict[str, Any], catalog: Dict[str, Any]) -> str:
+    unresolved = [
+        dependency
+        for dependency in track["depends_on_tracks"]
+        if dependency not in catalog.get("completed_track_ids", set())
+    ]
+    if not unresolved:
+        return f"Track '{track['track_id']}' is not available yet."
+    return (
+        f"Track '{track['track_id']}' is locked. Complete these tracks first: "
+        f"{', '.join(unresolved)}."
+    )
+
+
+def _default_start_lesson(
+    catalog: Dict[str, Any], metadata: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    current = get_current_lesson(metadata, catalog)
+    completed_ids = get_completed_lesson_ids(metadata)
+    if current and current["lesson_id"] not in completed_ids:
+        return current
+
+    candidate_groups = [
+        [
+            track
+            for track in catalog["tracks"]
+            if track["status"] == "active" and track["is_unlocked"]
+        ],
+        [track for track in catalog["tracks"] if track["is_unlocked"]],
+        [track for track in catalog["tracks"] if track["status"] == "active"],
+        list(catalog["tracks"]),
+    ]
+
+    for group in candidate_groups:
+        for track in group:
+            for lesson in track["lessons"]:
+                if lesson["lesson_id"] not in completed_ids:
+                    return lesson
+            if track["lessons"]:
+                return track["lessons"][0]
+
+    return None
+
+
+def _resolve_start_target(
+    reference: Optional[str], catalog: Dict[str, Any], metadata: Dict[str, Any]
+) -> Dict[str, Any]:
+    if not reference:
+        lesson = _default_start_lesson(catalog, metadata)
+        if lesson is None:
+            raise LearningReferenceError(
+                "No lessons found. Add track folders under learning/lessons first."
+            )
+        return lesson
+
+    reference = str(reference).strip()
+    if not reference:
+        raise LearningReferenceError("Reference cannot be empty.")
+
+    if reference in catalog["lessons_by_id"] or "/" in reference:
+        lesson = resolve_lesson_reference(reference, catalog)
+        track = catalog["tracks_by_id"][lesson["track_id"]]
+        if not track["is_unlocked"]:
+            raise LearningReferenceError(_track_lock_message(track, catalog))
+        return lesson
+
+    track = resolve_track_reference(reference, catalog)
+    if not track["is_unlocked"]:
+        raise LearningReferenceError(_track_lock_message(track, catalog))
+    if not track["lessons"]:
+        raise LearningReferenceError(
+            f"Track '{track['track_id']}' does not contain any lessons yet."
+        )
+
+    current = get_current_lesson(metadata, catalog)
+    completed_ids = get_completed_lesson_ids(metadata)
+    if current and current["track_id"] == track["track_id"]:
+        if current["lesson_id"] not in completed_ids:
+            return current
+
+    for lesson in track["lessons"]:
+        if lesson["lesson_id"] not in completed_ids:
+            return lesson
+
+    return track["lessons"][0]
+
+
+def _suggest_unlocked_tracks(
+    catalog: Dict[str, Any], metadata: Dict[str, Any], exclude_track_id: Optional[str]
+) -> List[Dict[str, Any]]:
+    catalog = _attach_progress_or_exit(catalog, metadata)
+    completed_ids = get_completed_lesson_ids(metadata)
+    return [
+        track
+        for track in catalog["tracks"]
+        if track["status"] == "active"
+        and track["is_unlocked"]
+        and track["track_id"] != exclude_track_id
+        and not is_track_completed(track, completed_ids)
+    ]
+
+
+def _print_track_suggestions(tracks: List[Dict[str, Any]]) -> None:
+    if not tracks:
+        return
+
+    typer.echo("🧭 Unlocked tracks you can start next:")
+    for track in tracks:
+        typer.echo(f"  - {track['track_id']}: {track['name']}")
+
+
+def _mark_lesson_completed(
+    lesson: Dict[str, Any], metadata: Dict[str, Any], catalog: Dict[str, Any]
+) -> Dict[str, Any]:
+    completed_lesson_ids = get_completed_lesson_ids(metadata)
+    if lesson["lesson_id"] in completed_lesson_ids:
+        return {
+            "already_completed": True,
+            "next_lesson": None,
+            "track_completed": False,
+            "suggested_tracks": [],
+        }
+
+    metadata.setdefault("completed_lessons", [])
+    metadata["completed_lessons"].append(
+        {
+            "lesson_id": lesson["lesson_id"],
+            "completed_at": datetime.datetime.now().isoformat(),
+        }
+    )
+
+    next_lesson = None
+    track_completed = False
+    suggested_tracks: List[Dict[str, Any]] = []
+
+    if metadata.get("current_lesson_id") == lesson["lesson_id"]:
+        next_lesson = catalog_get_next_lesson(lesson["lesson_id"], metadata, catalog)
+        if next_lesson:
+            metadata["current_lesson_id"] = next_lesson["lesson_id"]
+        else:
+            metadata["current_lesson_id"] = None
+            track_completed = True
+            suggested_tracks = _suggest_unlocked_tracks(
+                catalog, metadata, lesson["track_id"]
+            )
+
+    _save_metadata_or_exit(metadata)
+
+    return {
+        "already_completed": False,
+        "next_lesson": next_lesson,
+        "track_completed": track_completed,
+        "suggested_tracks": suggested_tracks,
+    }
+
+
+def _open_lesson_path(lesson: Dict[str, Any], web: bool = False) -> None:
+    lesson_path = get_lessons_dir() / lesson["path"]
+    if not lesson_path.exists():
+        typer.echo(f"❌ Lesson file not found: {lesson_path}", err=True)
+        raise typer.Exit(1)
+
+    typer.echo(
+        f"📖 Opening {lesson['track_id']}/{lesson['sequence_label']} - {lesson['title']}"
+    )
+
+    if web:
+        config = load_config()
+        web_config = config.get("generate", {}).get("web", {})
+        base_url = web_config.get("url")
+
+        if not base_url:
+            typer.echo(
+                "❌ No web URL configured in config.yaml under generate.web.url",
+                err=True,
+            )
+            raise typer.Exit(1)
+
+        lesson_url = f"{base_url.rstrip('/')}/{lesson['url']}"
+        webbrowser.open(lesson_url)
+        typer.echo(f"🌐 Opened in web browser: {lesson_url}")
+        return
+
+    editor = os.getenv("EDITOR", "vim")
+    os.system(f'{editor} "{lesson_path}"')
+
+
+
+FRONTMATTER_BLOCK_RE = re.compile(r"^---\s*\r?\n(.*?)\r?\n---\s*(?:\r?\n(.*))?$", re.DOTALL)
+
+
+def _rewrite_frontmatter_field(path: Path, key: str, value: Any) -> None:
+    text = path.read_text(encoding="utf-8")
+    match = FRONTMATTER_BLOCK_RE.match(text)
+    if not match:
+        typer.echo(f"❌ Markdown file is missing YAML frontmatter: {path}", err=True)
+        raise typer.Exit(1)
+
+    frontmatter = yaml.safe_load(match.group(1)) or {}
+    if not isinstance(frontmatter, dict):
+        typer.echo(f"❌ Frontmatter must be a mapping: {path}", err=True)
+        raise typer.Exit(1)
+
+    frontmatter[key] = value
+    body = match.group(2) or ""
+    frontmatter_text = yaml.safe_dump(frontmatter, sort_keys=False)
+    path.write_text(f"---\n{frontmatter_text}---\n\n{body.lstrip()}", encoding="utf-8")
+
+
+def _resolve_publication_target(reference: str, catalog: Dict[str, Any]) -> tuple[Path, str]:
+    try:
+        track = resolve_track_reference(reference, catalog)
+        return get_lessons_dir() / track["path"], f"track {track['track_id']}"
+    except LearningReferenceError:
+        pass
+
+    try:
+        lesson = resolve_lesson_reference(reference, catalog)
+    except LearningReferenceError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
+
+    return (
+        get_lessons_dir() / lesson["path"],
+        f"lesson {lesson['track_id']}/{lesson['sequence_label']}",
+    )
+
+
+def _set_public(reference: str, is_public: bool) -> None:
+    catalog = _load_catalog_or_exit()
+    target_path, label = _resolve_publication_target(reference, catalog)
+    _rewrite_frontmatter_field(target_path, "public", is_public)
+    state = "public" if is_public else "hidden"
+    typer.echo(f"✅ Set {label} to {state}.")
+
+def display_lessons_tree(
+    classifications: List[Dict[str, Any]], include_private: bool = False
+) -> None:
+    """Display classifications, tracks, and lessons in a tree structure."""
+    console = Console()
+
+    if not classifications:
+        console.print("❌ No classifications found.")
+        return
+
+    root = Tree("📚 Learning")
+    for classification in classifications:
+        classification_node = root.add(
+            f"🗂️ {_classification_display_name(classification)}"
+        )
+        for track in classification["tracks"]:
+            visible_lessons = _visible_lessons(track, include_private=include_private)
+            summary = (
+                f"{_track_icon(track)} {track['name']} "
+                f"{_track_status_badge(track)} "
+                f"{_track_progress_label(track, include_private=include_private)}"
+            )
+            if track.get("track_tier"):
+                summary += f" [{track['track_tier'].upper()}]"
+            track_node = classification_node.add(summary)
+            for lesson in visible_lessons:
+                track_node.add(
+                    f"{_lesson_icon(lesson)} {lesson['sequence_label']} "
+                    f"{lesson['title']}{_lesson_kind_badge(lesson)}"
+                )
 
     console.print(root)
 
 
-def get_next_lesson(
-    current_lesson: str, metadata: Dict[str, Any]
-) -> Optional[str]:
-    """Get the next uncompleted lesson after the current one."""
-    all_lessons = get_all_lessons()
-    completed_names = [
-        item["name"] for item in metadata.get("completed_lessons", [])
+
+@learn_app.command("publish")
+def publish_content(
+    reference: Annotated[
+        str,
+        typer.Argument(help="Track id, lesson id, or track_id/NNN[.md] to publish"),
+    ],
+):
+    """Set a track or lesson public flag to true for generated sites."""
+    _set_public(reference, True)
+
+
+@learn_app.command("unpublish")
+def unpublish_content(
+    reference: Annotated[
+        str,
+        typer.Argument(help="Track id, lesson id, or track_id/NNN[.md] to hide"),
+    ],
+):
+    """Set a track or lesson public flag to false for generated sites."""
+    _set_public(reference, False)
+
+
+@learn_app.command("review-next")
+def review_next_lesson(
+    track: Annotated[
+        Optional[str],
+        typer.Option("--track", help="Limit the review queue to one track"),
+    ] = None,
+    include_drafts: Annotated[
+        bool, typer.Option("--include-drafts", help="Include draft tracks")
+    ] = False,
+    open_lesson: Annotated[
+        bool, typer.Option("--open", help="Open the next pending lesson")
+    ] = False,
+):
+    """Show the next lesson that still needs editorial review."""
+    catalog = _load_catalog_or_exit()
+
+    if track:
+        try:
+            tracks = [resolve_track_reference(track, catalog)]
+        except LearningReferenceError as exc:
+            typer.echo(f"❌ {exc}", err=True)
+            raise typer.Exit(1)
+    else:
+        tracks = _visible_tracks(catalog, include_drafts=include_drafts)
+
+    pending_lessons = [
+        lesson
+        for track_item in tracks
+        for lesson in track_item["lessons"]
+        if (lesson.get("review_status") or "pending") not in {"reviewed", "exempt"}
     ]
 
-    # Find current lesson index
-    current_index = next(
-        (i for i, lesson in enumerate(all_lessons) if lesson["name"] == current_lesson),
-        -1,
+    if not pending_lessons:
+        typer.echo("✅ No pending lessons found for review.")
+        return
+
+    pending_lessons.sort(
+        key=lambda lesson: (
+            lesson.get("legacy_day") if lesson.get("legacy_day") is not None else 10**9,
+            lesson["track_id"],
+            lesson["sequence"],
+        )
     )
+    lesson = pending_lessons[0]
+    typer.echo(
+        f"📝 Next review: {lesson['track_id']}/{lesson['sequence_label']} "
+        f"[{lesson['lesson_id']}] - {lesson['title']}"
+    )
+    typer.echo(f"Path: {get_lessons_dir() / lesson['path']}")
 
-    if current_index == -1:
-        return None
-
-    # Look for the next uncompleted lesson
-    for i in range(current_index + 1, len(all_lessons)):
-        if all_lessons[i]["name"] not in completed_names:
-            return all_lessons[i]["name"]
-
-    # If we've reached the end, look from beginning
-    for i in range(0, current_index):
-        if all_lessons[i]["name"] not in completed_names:
-            return all_lessons[i]["name"]
-
-    return None  # No uncompleted lessons found
-
+    if open_lesson:
+        _open_lesson_path(lesson)
 
 @learn_app.command("current")
 def open_current_lesson(
     web: Annotated[
-        bool, typer.Option("--web", help="Open lesson in web browser using configured URL")
+        bool,
+        typer.Option(
+            "--web", help="Open the current lesson in the generated website"
+        ),
     ] = False,
 ):
-    """Open the current lesson in progress using the configured editor or web browser."""
-    metadata = load_metadata()
-    current = metadata.get("current_lesson")
+    """Open the current lesson using the configured editor or website."""
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+    current = get_current_lesson(metadata, catalog)
 
     if not current:
-        lessons = get_all_lessons()
-        if not lessons:
-            typer.echo("❌ No lessons found. Create some in the lessons directory first.")
+        current = _default_start_lesson(catalog, metadata)
+        if not current:
+            typer.echo(
+                "❌ No lessons found. Add track folders under learning/lessons first."
+            )
             raise typer.Exit(1)
+        metadata["current_lesson_id"] = current["lesson_id"]
+        typer.echo(
+            f"📚 Current lesson set to: {current['track_id']}/{current['sequence_label']}"
+        )
 
-        # Set the first lesson as current
-        current = lessons[0]["name"]
-        metadata["current_lesson"] = current
-        save_metadata(metadata)
-        typer.echo(f"📚 Set first lesson as current: {current}")
-
-    # Update last opened timestamp
-    metadata["last_opened"] = datetime.datetime.now().isoformat()
-    save_metadata(metadata)
-
-    # Get the lesson path
-    lesson_path = get_lessons_dir() / current
-    if not lesson_path.exists():
-        typer.echo(f"❌ Current lesson file not found: {lesson_path}")
-        raise typer.Exit(1)
-
-    typer.echo(f"📖 Opening lesson: {current}")
-
-    if web:
-        # Open in web browser using configured URL
-        config = load_config()
-        web_config = config.get("generate", {}).get("web", {})
-        base_url = web_config.get("url")
-        
-        if not base_url:
-            typer.echo("❌ No web URL configured in config.yaml under generate.web.url", err=True)
-            raise typer.Exit(1)
-        
-        # Convert lesson path to URL path
-        # e.g., "distributed-systems/01.md" -> "lessons/distributed-systems/01.html"
-        lesson_name = current
-        if lesson_name.endswith(".md"):
-            lesson_name = lesson_name[:-3]  # Remove .md extension
-        
-        # Build URL: BASE_URL/lessons/XX/YY/ZZ.html
-        lesson_url = f"{base_url.rstrip('/')}/lessons/{lesson_name}.html"
-        
-        webbrowser.open(lesson_url)
-        typer.echo(f"🌐 Opened in web browser: {lesson_url}")
-    else:
-        # Open in editor
-        editor = os.getenv("EDITOR", "vim")
-        os.system(f'{editor} "{lesson_path}"')
+    metadata["last_opened_at"] = datetime.datetime.now().isoformat()
+    _save_metadata_or_exit(metadata)
+    _open_lesson_path(current, web=web)
 
 
 @learn_app.command("list")
 def list_lessons(
-    all_lessons_flag: Annotated[
-        bool, typer.Option("--all", "-a", help="Show all lessons")
-    ] = False,
     completed: Annotated[
-        bool, typer.Option("--completed", "-c", help="Show only completed lessons")
+        bool, typer.Option("--completed", "-c", help="Show only completed items")
     ] = False,
     pending: Annotated[
-        bool, typer.Option("--pending", "-p", help="Show only pending lessons")
+        bool, typer.Option("--pending", "-p", help="Show only pending items")
     ] = False,
     tree: Annotated[
-        bool, typer.Option("--tree", "-t", help="Show as tree structure")
+        bool, typer.Option("--tree", "-t", help="Show a track tree")
     ] = False,
-    flat: Annotated[
-        bool, typer.Option("--flat", "-f", help="Don't search subdirectories")
-    ] = False,
-    general_topic: Annotated[
-        Optional[str], typer.Option("--general-topic", "-g", help="Filter by general topic")
+    track: Annotated[
+        Optional[str],
+        typer.Option("--track", help="List lessons for a specific track"),
+    ] = None,
+    classification: Annotated[
+        Optional[str],
+        typer.Option("--classification", help="Filter by classification slug"),
     ] = None,
     difficulty: Annotated[
-        Optional[str], typer.Option("--difficulty", "-d", help="Filter by difficulty (beginner, intermediate, advanced)")
+        Optional[str],
+        typer.Option(
+            "--difficulty",
+            "-d",
+            help="Filter by difficulty (beginner, intermediate, advanced)",
+        ),
     ] = None,
+    include_drafts: Annotated[
+        bool, typer.Option("--include-drafts", help="Include draft tracks")
+    ] = False,
+    include_private: Annotated[
+        bool, typer.Option("--include-private", help="Include private lessons")
+    ] = False,
 ):
-    """List lessons with their status."""
-    metadata = load_metadata()
-    all_lessons = get_all_lessons(recursive=not flat)
+    """List tracks or lessons in the current learning catalog."""
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
 
-    if not all_lessons:
-        typer.echo("❌ No lessons found. Create some in the lessons directory first.")
-        return
-
-    # Determine which lessons to show
-    completed_names = [
-        item["name"] for item in metadata.get("completed_lessons", [])
-    ]
-    current = metadata.get("current_lesson")
-
-    if completed:
-        lessons_to_show = [
-            lesson for lesson in all_lessons
-            if lesson["name"] in completed_names
-        ]
-    elif pending:
-        lessons_to_show = [
-            lesson for lesson in all_lessons
-            if lesson["name"] not in completed_names
-        ]
-    else:
-        lessons_to_show = all_lessons
-
-    # Apply general_topic filter
-    if general_topic:
-        lessons_to_show = [
-            lesson for lesson in lessons_to_show
-            if lesson.get("general_topic") and lesson["general_topic"].lower() == general_topic.lower()
-        ]
-
-    # Apply difficulty filter
-    if difficulty:
-        lessons_to_show = [
-            lesson for lesson in lessons_to_show
-            if lesson.get("difficulty") and lesson["difficulty"].lower() == difficulty.lower()
-        ]
+    if classification and classification not in catalog.get("classifications_by_id", {}):
+        typer.echo(f"❌ Unknown classification: {classification}", err=True)
+        raise typer.Exit(1)
 
     if tree:
-        # Show as tree structure
-        display_lessons_tree(lessons_to_show, metadata)
-    else:
-        # Show as table
-        console = Console()
+        if track:
+            try:
+                selected_track = resolve_track_reference(track, catalog)
+            except LearningReferenceError as exc:
+                typer.echo(f"❌ {exc}", err=True)
+                raise typer.Exit(1)
+            classifications = [
+                {
+                    "classification_id": selected_track["classification"],
+                    "classification_name": selected_track.get("classification_name")
+                    or selected_track["classification"].replace("-", " ").title(),
+                    "tracks": [selected_track],
+                }
+            ]
+        else:
+            classifications = _visible_classifications(
+                catalog,
+                include_drafts=include_drafts,
+                include_private=include_private,
+                classification_id=classification,
+                completed=completed,
+                pending=pending,
+                difficulty=difficulty,
+            )
+        display_lessons_tree(classifications, include_private=include_private)
+        return
+
+    console = Console()
+    completed_ids = get_completed_lesson_ids(metadata)
+    current_lesson_id = metadata.get("current_lesson_id")
+
+    if track:
+        try:
+            selected_track = resolve_track_reference(track, catalog)
+        except LearningReferenceError as exc:
+            typer.echo(f"❌ {exc}", err=True)
+            raise typer.Exit(1)
+
+        lessons = [
+            lesson
+            for lesson in _visible_lessons(
+                selected_track, include_private=include_private
+            )
+            if _lesson_matches_filters(
+                lesson,
+                completed_ids,
+                current_lesson_id,
+                completed,
+                pending,
+                difficulty,
+            )
+        ]
+
+        if not lessons:
+            typer.echo("❌ No lessons matched the requested filters.")
+            return
+
         table = Table(show_header=True, header_style="bold blue")
         table.add_column("Status", style="cyan")
+        table.add_column("Seq", style="white")
         table.add_column("Lesson", style="white")
-        table.add_column("Directory", style="dim")
-        table.add_column("Completed At", style="green")
+        table.add_column("Minutes", style="green")
 
-        for lesson in lessons_to_show:
-            name = lesson["name"]
-            parts = name.split("/")
+        for lesson in lessons:
+            table.add_row(
+                _lesson_icon(lesson),
+                lesson["sequence_label"],
+                f"{lesson['title']}{_lesson_kind_badge(lesson)}",
+                str(lesson.get("estimated_time") or "-"),
+            )
 
-            if len(parts) > 1:
-                filename = parts[-1]
-                directory = "/".join(parts[:-1])
-            else:
-                filename = name
-                directory = ""
+        console.print(table)
+        console.print(
+            f"\n📚 {selected_track['name']} "
+            f"({_classification_display_name({'classification_name': selected_track.get('classification_name'), 'classification_id': selected_track['classification']})}) "
+            f"| {_track_progress_label(selected_track, include_private=include_private)} completed"
+        )
+        return
 
-            if name in completed_names:
-                status = "✅"
-                completed_at = next(
-                    (
-                        item["completed_at"]
-                        for item in metadata.get("completed_lessons", [])
-                        if item["name"] == name
-                    ),
-                    "",
-                )
-            elif name == current:
-                status = "🔍"
-                completed_at = ""
-            else:
-                status = "⏳"
-                completed_at = ""
+    classifications_to_show = _visible_classifications(
+        catalog,
+        include_drafts=include_drafts,
+        include_private=include_private,
+        classification_id=classification,
+        completed=completed,
+        pending=pending,
+        difficulty=difficulty,
+    )
 
-            # Use display_name (constructed from frontmatter if available)
-            display_label = lesson.get("display_name", filename)
-            table.add_row(status, display_label, directory, completed_at)
+    if not classifications_to_show:
+        typer.echo("❌ No tracks matched the requested filters.")
+        return
+
+    for classification_item in classifications_to_show:
+        console.print()
+        console.print(
+            f"[bold]{classification_item['classification_name']}[/bold] "
+            f"({classification_item['track_count']} tracks)"
+        )
+        table = Table(show_header=True, header_style="bold blue")
+        table.add_column("Status", style="cyan")
+        table.add_column("Track", style="white")
+        table.add_column("Summary", style="white")
+        table.add_column("Lessons", style="green")
+        table.add_column("Difficulty", style="magenta")
+        table.add_column("Tier", style="yellow")
+
+        for track_item in classification_item["tracks"]:
+            table.add_row(
+                _track_status_badge(track_item),
+                _track_display_name(track_item),
+                track_item.get("description") or "-",
+                _track_progress_label(track_item, include_private=include_private),
+                _track_difficulty_label(track_item),
+                track_item.get("track_tier") or "-",
+            )
 
         console.print(table)
 
-        # Summary
-        total = len(all_lessons)
-        completed_count = len(completed_names)
-        pending_count = total - completed_count
-        console.print(
-            f"\n📊 Total: {total} | ✅ Completed: {completed_count} | ⏳ Pending: {pending_count}"
-        )
+    total_tracks = sum(
+        classification_item["track_count"] for classification_item in classifications_to_show
+    )
+    console.print(
+        "\n📊 "
+        f"Classifications: {len(classifications_to_show)} | "
+        f"Tracks: {total_tracks} | "
+        f"Done: {sum(track['progress_status'] == 'done' for classification_item in classifications_to_show for track in classification_item['tracks'])} | "
+        f"In Progress: {sum(track['progress_status'] == 'in_progress' for classification_item in classifications_to_show for track in classification_item['tracks'])}"
+    )
 
 
 @learn_app.command("tree")
-def show_lesson_tree():
-    """Show lessons in a tree structure."""
-    metadata = load_metadata()
-    all_lessons = get_all_lessons(recursive=True)
+def show_lesson_tree(
+    track: Annotated[
+        Optional[str],
+        typer.Option("--track", help="Show only a specific track"),
+    ] = None,
+    classification: Annotated[
+        Optional[str],
+        typer.Option("--classification", help="Show only a specific classification"),
+    ] = None,
+    include_drafts: Annotated[
+        bool, typer.Option("--include-drafts", help="Include draft tracks")
+    ] = False,
+    include_private: Annotated[
+        bool, typer.Option("--include-private", help="Include private lessons")
+    ] = False,
+):
+    """Show tracks and lessons in a tree structure."""
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+    if classification and classification not in catalog.get("classifications_by_id", {}):
+        typer.echo(f"❌ Unknown classification: {classification}", err=True)
+        raise typer.Exit(1)
 
-    if not all_lessons:
-        typer.echo("❌ No lessons found. Create some in the lessons directory first.")
-        return
+    if track:
+        try:
+            selected_track = resolve_track_reference(track, catalog)
+        except LearningReferenceError as exc:
+            typer.echo(f"❌ {exc}", err=True)
+            raise typer.Exit(1)
+        classifications = [
+            {
+                "classification_id": selected_track["classification"],
+                "classification_name": selected_track.get("classification_name")
+                or selected_track["classification"].replace("-", " ").title(),
+                "tracks": [selected_track],
+            }
+        ]
+    else:
+        classifications = _visible_classifications(
+            catalog,
+            include_drafts=include_drafts,
+            include_private=include_private,
+            classification_id=classification,
+        )
 
-    display_lessons_tree(all_lessons, metadata)
+    display_lessons_tree(classifications, include_private=include_private)
 
 
 @learn_app.command("complete")
 def complete_lesson(
     lesson: Annotated[
         Optional[str],
-        typer.Argument(help="Name of the lesson to mark as completed"),
+        typer.Argument(
+            help="Lesson reference (lesson_id or track_id/NNN[.md]) to mark as completed"
+        ),
     ] = None,
 ):
     """Mark a lesson as completed."""
-    metadata = load_metadata()
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
 
-    # If no lesson specified, use current
     if not lesson:
-        lesson = metadata.get("current_lesson")
-        if not lesson:
-            typer.echo("❌ No current lesson set. Use 'mystuff learn start' to set one.")
+        current = get_current_lesson(metadata, catalog)
+        if not current:
+            typer.echo("❌ No current lesson set. Use 'mystuff learn start' first.")
+            raise typer.Exit(1)
+        target_lesson = current
+    else:
+        try:
+            target_lesson = resolve_lesson_reference(lesson, catalog)
+        except LearningReferenceError as exc:
+            typer.echo(f"❌ {exc}", err=True)
             raise typer.Exit(1)
 
-    # Verify the lesson exists
-    lesson_path = get_lessons_dir() / lesson
-    if not lesson_path.exists():
-        typer.echo(f"❌ Lesson file not found: {lesson}")
-        raise typer.Exit(1)
-
-    # Check if already completed
-    completed_names = [
-        item["name"] for item in metadata.get("completed_lessons", [])
-    ]
-    if lesson in completed_names:
-        typer.echo(f"ℹ️  Lesson '{lesson}' is already marked as completed.")
+    result = _mark_lesson_completed(target_lesson, metadata, catalog)
+    if result["already_completed"]:
+        typer.echo(
+            f"ℹ️  Lesson '{target_lesson['lesson_id']}' is already marked as completed."
+        )
         return
 
-    # Add to completed lessons
-    if "completed_lessons" not in metadata:
-        metadata["completed_lessons"] = []
-
-    metadata["completed_lessons"].append(
-        {"name": lesson, "completed_at": datetime.datetime.now().isoformat()}
+    typer.echo(
+        f"✅ Marked lesson '{target_lesson['lesson_id']}' "
+        f"({target_lesson['track_id']}/{target_lesson['sequence_label']}) as completed."
     )
-
-    # If this was the current lesson, find the next one
-    if lesson == metadata.get("current_lesson"):
-        next_lesson = get_next_lesson(lesson, metadata)
-
-        if next_lesson:
-            metadata["current_lesson"] = next_lesson
-            typer.echo(f"✅ Marked lesson '{lesson}' as completed!")
-            typer.echo(f"📚 New current lesson: {next_lesson}")
-        else:
-            metadata["current_lesson"] = None
-            typer.echo(f"✅ Marked lesson '{lesson}' as completed!")
-            typer.echo("🎉 Congratulations! You've completed all lessons.")
-    else:
-        typer.echo(f"✅ Marked lesson '{lesson}' as completed!")
-
-    save_metadata(metadata)
+    if result["next_lesson"]:
+        next_lesson = result["next_lesson"]
+        typer.echo(
+            f"📚 New current lesson: {next_lesson['track_id']}/{next_lesson['sequence_label']} "
+            f"- {next_lesson['title']}"
+        )
+    elif result["track_completed"]:
+        typer.echo(f"🎉 Track completed: {target_lesson['track_id']}")
+        _print_track_suggestions(result["suggested_tracks"])
 
 
 @learn_app.command("next")
 def next_lesson(
     web: Annotated[
-        bool, typer.Option("--web", help="Open next lesson in web browser using configured URL")
+        bool, typer.Option("--web", help="Open the next lesson in the website")
     ] = False,
 ):
-    """Complete current lesson and move to the next one."""
-    metadata = load_metadata()
-    current = metadata.get("current_lesson")
+    """Complete the current lesson and advance within the same track."""
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+    current = get_current_lesson(metadata, catalog)
 
     if not current:
-        typer.echo("❌ No current lesson set. Use 'mystuff learn start' to set one.")
+        typer.echo("❌ No current lesson set. Use 'mystuff learn start' first.")
         raise typer.Exit(1)
 
-    # Mark current as complete
-    complete_lesson(current)
+    result = _mark_lesson_completed(current, metadata, catalog)
+    if result["already_completed"]:
+        typer.echo(
+            f"ℹ️  Lesson '{current['lesson_id']}' was already completed."
+        )
+        return
 
-    # Reload metadata to get the new current lesson
-    metadata = load_metadata()
-
-    # Open the new current lesson if available
-    if metadata.get("current_lesson"):
+    typer.echo(
+        f"✅ Completed {current['track_id']}/{current['sequence_label']} - {current['title']}"
+    )
+    if result["next_lesson"]:
+        next_lesson_item = result["next_lesson"]
+        typer.echo(
+            f"📚 Next lesson: {next_lesson_item['track_id']}/{next_lesson_item['sequence_label']} "
+            f"- {next_lesson_item['title']}"
+        )
         if typer.confirm("Open the next lesson now?", default=True):
             open_current_lesson(web=web)
-    else:
-        typer.echo("🎉 No more lessons to complete!")
+        return
+
+    typer.echo(f"🎉 Track completed: {current['track_id']}")
+    _print_track_suggestions(result["suggested_tracks"])
 
 
 @learn_app.command("start")
 def start_lesson(
     lesson: Annotated[
-        Optional[str], typer.Argument(help="Name of the lesson to set as current")
+        Optional[str],
+        typer.Argument(
+            help="Track id, lesson reference (track_id/NNN[.md]), or lesson_id"
+        ),
     ] = None,
     fzf: Annotated[
         bool, typer.Option("--fzf", help="Use fzf to select a lesson")
     ] = False,
-    directory: Annotated[
-        Optional[str],
-        typer.Option("--dir", "-d", help="Filter by directory"),
-    ] = None,
 ):
-    """Set a specific lesson as the current one."""
-    metadata = load_metadata()
-    all_lessons = get_all_lessons(recursive=True)
-
-    if not all_lessons:
-        typer.echo("❌ No lessons found. Create some in the lessons directory first.")
-        raise typer.Exit(1)
-
-    # Filter by directory if specified
-    if directory:
-        all_lessons = [
-            lesson for lesson in all_lessons
-            if lesson["name"].startswith(f"{directory}/")
-        ]
-
-        if not all_lessons:
-            typer.echo(f"❌ No lessons found in directory: {directory}")
-            raise typer.Exit(1)
+    """Start or resume a track-aware lesson flow."""
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
 
     if fzf:
-        # Use fzf to select a lesson
+        unlocked_tracks = [
+            track_item
+            for track_item in catalog["tracks"]
+            if track_item["is_unlocked"] and track_item["status"] == "active"
+        ]
+        selectable_lessons = [
+            lesson_item
+            for track_item in (unlocked_tracks or catalog["tracks"])
+            for lesson_item in track_item["lessons"]
+        ]
+
+        if not selectable_lessons:
+            typer.echo("❌ No lessons available to select.")
+            raise typer.Exit(1)
+
+        label_to_lesson: Dict[str, Dict[str, Any]] = {}
         with tempfile.NamedTemporaryFile(
             mode="w", delete=False, suffix=".txt", encoding="utf-8"
         ) as temp_input:
-            for l_item in all_lessons:
-                temp_input.write(f"{l_item['name']}\n")
+            for lesson_item in selectable_lessons:
+                label = (
+                    f"{lesson_item['track_id']}/{lesson_item['sequence_label']} | "
+                    f"{lesson_item['title']} [{lesson_item['lesson_id']}]"
+                )
+                label_to_lesson[label] = lesson_item
+                temp_input.write(f"{label}\n")
             temp_input_path = temp_input.name
 
         output_file = tempfile.mktemp(suffix=".txt")
 
         try:
-            # Run fzf
             cmd = (
                 f"cat {temp_input_path} | fzf --height=40% --layout=reverse "
                 f"--prompt='Select lesson: ' > {output_file}"
@@ -1288,24 +1650,19 @@ def start_lesson(
             result = os.system(cmd)
 
             if result == 0:
-                try:
-                    with open(output_file, "r", encoding="utf-8") as f:
-                        selected = f.read().strip()
-
-                    if selected:
-                        lesson = selected
-                    else:
-                        typer.echo("❌ No lesson selected.")
-                        raise typer.Exit(1)
-                except FileNotFoundError:
+                with open(output_file, "r", encoding="utf-8") as handle:
+                    selected_label = handle.read().strip()
+                if not selected_label:
                     typer.echo("❌ No lesson selected.")
                     raise typer.Exit(1)
+                lesson = label_to_lesson[selected_label]["lesson_id"]
             else:
                 typer.echo("❌ No lesson selected.")
                 raise typer.Exit(1)
-
+        except FileNotFoundError:
+            typer.echo("❌ No lesson selected.")
+            raise typer.Exit(1)
         finally:
-            # Clean up temp files
             try:
                 os.unlink(temp_input_path)
             except OSError:
@@ -1315,126 +1672,182 @@ def start_lesson(
             except OSError:
                 pass
 
-    # Verify the lesson exists if specified
-    if lesson:
-        lesson_path = get_lessons_dir() / lesson
-        if not lesson_path.exists():
-            typer.echo(f"❌ Lesson file not found: {lesson}")
-            raise typer.Exit(1)
-    else:
-        # Select first uncompleted lesson
-        completed_names = [
-            item["name"] for item in metadata.get("completed_lessons", [])
-        ]
-        uncompleted = [
-            lesson_item for lesson_item in all_lessons
-            if lesson_item["name"] not in completed_names
-        ]
+    try:
+        target_lesson = _resolve_start_target(lesson, catalog, metadata)
+    except LearningReferenceError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
 
-        if uncompleted:
-            lesson = uncompleted[0]["name"]
-        else:
-            lesson = all_lessons[0]["name"]
-            typer.echo("ℹ️  All lessons are completed. Starting from the first one.")
+    metadata["current_lesson_id"] = target_lesson["lesson_id"]
+    _save_metadata_or_exit(metadata)
+    typer.echo(
+        f"📚 Current lesson set to: {target_lesson['track_id']}/{target_lesson['sequence_label']} "
+        f"- {target_lesson['title']}"
+    )
 
-    # Update current lesson
-    metadata["current_lesson"] = lesson
-    save_metadata(metadata)
-    typer.echo(f"📚 Current lesson set to: {lesson}")
-
-    # Ask if user wants to open it
     if typer.confirm("Open this lesson now?", default=True):
         open_current_lesson()
 
 
 @learn_app.command("stats")
-def show_stats():
-    """Show learning statistics."""
-    metadata = load_metadata()
-    all_lessons = get_all_lessons()
+def show_stats(
+    include_drafts: Annotated[
+        bool, typer.Option("--include-drafts", help="Include draft tracks")
+    ] = False,
+    include_private: Annotated[
+        bool, typer.Option("--include-private", help="Include private lessons")
+    ] = False,
+):
+    """Show track and lesson progress statistics."""
+    metadata = _load_metadata_or_exit()
+    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+    tracks = _visible_tracks(catalog, include_drafts=include_drafts)
 
-    if not all_lessons:
-        typer.echo("❌ No lessons found. Create some in the lessons directory first.")
+    if not tracks:
+        typer.echo("❌ No tracks found.")
         return
 
-    completed = metadata.get("completed_lessons", [])
-
-    # Calculate statistics
-    total_lessons = len(all_lessons)
-    completed_count = len(completed)
-    pending_count = total_lessons - completed_count
+    visible_lessons = [
+        lesson
+        for track_item in tracks
+        for lesson in _visible_lessons(track_item, include_private=include_private)
+    ]
+    visible_classifications = _visible_classifications(
+        catalog,
+        include_drafts=include_drafts,
+        include_private=include_private,
+    )
+    completed_ids = get_completed_lesson_ids(metadata)
+    completed_visible_lessons = sum(
+        1 for lesson in visible_lessons if lesson["lesson_id"] in completed_ids
+    )
+    total_visible_lessons = len(visible_lessons)
+    pending_visible_lessons = total_visible_lessons - completed_visible_lessons
     completion_pct = (
-        (completed_count / total_lessons) * 100 if total_lessons > 0 else 0
+        (completed_visible_lessons / total_visible_lessons) * 100
+        if total_visible_lessons
+        else 0
     )
 
-    # Get first and last completion dates
     first_date = None
     last_date = None
-    days = 0
-    avg_per_day = 0
-
-    if completed:
+    avg_per_day = 0.0
+    completed_items = metadata.get("completed_lessons", [])
+    if completed_items:
         dates = [
             datetime.datetime.fromisoformat(item["completed_at"])
-            for item in completed
-            if "completed_at" in item
+            for item in completed_items
+            if item.get("completed_at")
         ]
         if dates:
             first_date = min(dates).date()
             last_date = max(dates).date()
-
-            # Calculate average lessons per day
             days = (last_date - first_date).days + 1
-            avg_per_day = completed_count / days if days > 0 else completed_count
+            avg_per_day = len(dates) / days if days > 0 else len(dates)
 
-    # Display statistics
     console = Console()
     console.print("[bold blue]📊 Learning Statistics[/bold blue]\n")
+    console.print(f"🗂️  Classifications visible: {len(visible_classifications)}")
+    console.print(f"🧱 Tracks visible: {len(tracks)}")
+    console.print(
+        "✅ Tracks done: "
+        f"{sum(track['progress_status'] == 'done' for track in tracks)}"
+    )
+    console.print(
+        "🔍 Tracks in progress: "
+        f"{sum(track['progress_status'] == 'in_progress' for track in tracks)}"
+    )
+    console.print(
+        f"🔒 Tracks locked: {sum(track['progress_status'] == 'locked' for track in tracks)}"
+    )
 
-    console.print(f"📚 Total lessons: {total_lessons}")
-    console.print(f"✅ Completed: {completed_count} ({completion_pct:.1f}%)")
-    console.print(f"⏳ Pending: {pending_count}")
+    console.print(f"\n📚 Lessons visible: {total_visible_lessons}")
+    console.print(
+        f"✅ Lessons completed: {completed_visible_lessons} ({completion_pct:.1f}%)"
+    )
+    console.print(f"⏳ Lessons pending: {pending_visible_lessons}")
 
-    if first_date:
+    if first_date and last_date:
         console.print(f"\n📆 First completion: {first_date}")
         console.print(f"📆 Last completion: {last_date}")
-        console.print(
-            f"⏱️  Average: {avg_per_day:.2f} lessons/day over {days} days"
-        )
+        console.print(f"⏱️  Average: {avg_per_day:.2f} lessons/day")
 
-    if metadata.get("current_lesson"):
-        console.print(f"\n🔍 Current lesson: {metadata['current_lesson']}")
+    current = get_current_lesson(metadata, catalog)
+    if current:
+        console.print(
+            f"\n🔍 Current lesson: {current['track_id']}/{current['sequence_label']} "
+            f"- {current['title']}"
+        )
     else:
         console.print("\n❌ No current lesson set.")
 
-    # Show last opened
-    if metadata.get("last_opened"):
-        last_opened = datetime.datetime.fromisoformat(metadata["last_opened"])
+    if metadata.get("last_opened_at"):
+        last_opened = datetime.datetime.fromisoformat(metadata["last_opened_at"])
         console.print(f"🕒 Last opened: {last_opened.strftime('%Y-%m-%d %H:%M:%S')}")
+
+    classification_table = Table(show_header=True, header_style="bold blue")
+    classification_table.add_column("Classification", style="white")
+    classification_table.add_column("Tracks", style="green")
+    classification_table.add_column("Done", style="cyan")
+    classification_table.add_column("In Progress", style="yellow")
+
+    for classification_item in visible_classifications:
+        classification_table.add_row(
+            classification_item["classification_name"],
+            str(classification_item["track_count"]),
+            str(
+                sum(
+                    track["progress_status"] == "done"
+                    for track in classification_item["tracks"]
+                )
+            ),
+            str(
+                sum(
+                    track["progress_status"] == "in_progress"
+                    for track in classification_item["tracks"]
+                )
+            ),
+        )
+
+    track_table = Table(show_header=True, header_style="bold blue")
+    track_table.add_column("Track", style="white")
+    track_table.add_column("Classification", style="white")
+    track_table.add_column("Status", style="cyan")
+    track_table.add_column("Progress", style="green")
+    track_table.add_column("Tier", style="yellow")
+
+    for track_item in tracks:
+        track_table.add_row(
+            track_item["name"],
+            track_item.get("classification_name")
+            or track_item["classification"].replace("-", " ").title(),
+            track_status_summary(track_item),
+            _track_progress_label(track_item, include_private=include_private),
+            track_item.get("track_tier") or "-",
+        )
+
+    console.print("\n")
+    console.print(classification_table)
+    console.print("\n")
+    console.print(track_table)
 
 
 @learn_app.command("reset")
 def reset_progress(
     confirm: Annotated[
         bool,
-        typer.Option(
-            "--yes", "-y", help="Skip confirmation prompt"
-        ),
+        typer.Option("--yes", "-y", help="Skip confirmation prompt"),
     ] = False,
 ):
-    """Reset all learning progress (keeps lessons, clears metadata)."""
-    if not confirm:
-        if not typer.confirm(
-            "⚠️  This will reset all your learning progress. Continue?",
-            default=False,
-        ):
-            typer.echo("❌ Operation cancelled.")
-            raise typer.Exit(0)
+    """Reset all learning progress while keeping the lessons on disk."""
+    if not confirm and not typer.confirm(
+        "⚠️  This will reset all your learning progress. Continue?",
+        default=False,
+    ):
+        typer.echo("❌ Operation cancelled.")
+        raise typer.Exit(0)
 
-    # Reset metadata to template
-    metadata = METADATA_TEMPLATE.copy()
-    save_metadata(metadata)
-
+    _save_metadata_or_exit(dict(METADATA_TEMPLATE))
     typer.echo("✅ Learning progress has been reset.")
 
 

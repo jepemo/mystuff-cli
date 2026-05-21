@@ -12,11 +12,21 @@ from typing import Annotated, Any, Dict, List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
 import jinja2
+import markdown
 from markdown.extensions import Extension
 from markdown.treeprocessors import Treeprocessor
 import typer
 import yaml
 from rich.console import Console
+
+from mystuff.learning_catalog import (
+    LearningCatalogError,
+    attach_progress,
+    get_completed_lesson_ids,
+    get_current_lesson,
+    load_learning_catalog,
+    load_metadata,
+)
 
 console = Console()
 
@@ -100,6 +110,78 @@ class LessonLinkRewriteExtension(Extension):
                 md, self.source_lesson_path, self.known_lesson_paths
             ),
             "lesson_link_rewrite",
+            15,
+        )
+
+
+def rewrite_track_markdown_link(
+    href: str, track_id: str, known_lesson_paths: set[str]
+) -> str:
+    """Rewrite lesson markdown links from a track page to published lesson pages."""
+    parsed = urlsplit(href)
+
+    if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
+        return href
+
+    if not parsed.path.lower().endswith(".md"):
+        return href
+
+    resolved_target = posixpath.normpath(posixpath.join(track_id, parsed.path))
+    if resolved_target == ".." or resolved_target.startswith("../"):
+        return href
+
+    if resolved_target not in known_lesson_paths:
+        return href
+
+    return urlunsplit(
+        (
+            "",
+            "",
+            f"../lessons/{resolved_target.removesuffix('.md')}.html",
+            parsed.query,
+            parsed.fragment,
+        )
+    )
+
+
+class TrackLinkRewriteTreeprocessor(Treeprocessor):
+    """Rewrite track-to-lesson markdown links in emitted HTML anchors."""
+
+    def __init__(self, md, track_id: str, known_lesson_paths: set[str]) -> None:
+        super().__init__(md)
+        self.track_id = track_id
+        self.known_lesson_paths = known_lesson_paths
+
+    def run(self, root):
+        for element in root.iter("a"):
+            href = element.get("href")
+            if not href:
+                continue
+
+            element.set(
+                "href",
+                rewrite_track_markdown_link(
+                    href, self.track_id, self.known_lesson_paths
+                ),
+            )
+
+        return root
+
+
+class TrackLinkRewriteExtension(Extension):
+    """Markdown extension that rewrites internal lesson links from track pages."""
+
+    def __init__(self, *, track_id: str, known_lesson_paths: set[str], **kwargs) -> None:
+        self.track_id = track_id
+        self.known_lesson_paths = known_lesson_paths
+        super().__init__(**kwargs)
+
+    def extendMarkdown(self, md) -> None:
+        md.treeprocessors.register(
+            TrackLinkRewriteTreeprocessor(
+                md, self.track_id, self.known_lesson_paths
+            ),
+            "track_link_rewrite",
             15,
         )
 
@@ -361,222 +443,150 @@ def load_mystuff_links() -> List[Dict[str, Any]]:
     return links
 
 
+def _load_catalog_with_progress() -> tuple[Dict[str, Any], Dict[str, Any]]:
+    catalog = load_learning_catalog()
+    metadata = load_metadata()
+    return attach_progress(catalog, metadata), metadata
+
+
+def _public_tracks(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [
+        track
+        for track in catalog["tracks"]
+        if track["status"] == "active" and track.get("public", True)
+    ]
+
+
+def _public_lessons(track: Dict[str, Any]) -> List[Dict[str, Any]]:
+    return [lesson for lesson in track["lessons"] if lesson["public"]]
+
+
+def _public_lesson_status(
+    lesson: Dict[str, Any], completed_ids: set, current_lesson_id: Optional[str]
+) -> str:
+    if lesson["lesson_id"] == current_lesson_id:
+        return "current"
+    if lesson["lesson_id"] in completed_ids:
+        return "done"
+    return "todo"
+
+
 def load_learning_data() -> Optional[Dict[str, Any]]:
-    """Load current learning lesson from metadata."""
-    import re
-    
-    mystuff_dir = get_mystuff_dir()
-    learning_dir = mystuff_dir / "learning"
-    metadata_path = learning_dir / "metadata.yaml"
-    
-    if not metadata_path.exists():
-        return None
-    
+    """Load current published learning state for the home page."""
     try:
-        with open(metadata_path, "r", encoding="utf-8") as f:
-            metadata = yaml.safe_load(f)
-        
-        if not metadata or not metadata.get("current_lesson"):
-            return None
-        
-        current_lesson = metadata.get("current_lesson")
-        
-        # Convert to string if needed and ensure filename has .md extension
-        current_lesson = str(current_lesson)
-        if not current_lesson.endswith('.md'):
-            current_lesson = f"{current_lesson}.md"
-        
-        # Try to extract title from the markdown file content
-        lessons_dir = learning_dir / "lessons"
-        lesson_path = lessons_dir / current_lesson
-        
-        title = None
-        if lesson_path.exists():
-            try:
-                with open(lesson_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-                
-                # Use the specialized function to extract lesson title
-                title = extract_lesson_title(content)
-            except Exception as e:
-                console.print(
-                    f"[yellow]⚠️  Warning: Could not read lesson file: {e}[/yellow]"
-                )
-        
-        # Fallback: extract title from filename if we couldn't read the file
-        if not title:
-            lesson_name = Path(current_lesson).stem
-            title = re.sub(r'^\d+-?', '', lesson_name)
-            title = title.replace('-', ' ').replace('_', ' ').title()
-        
-        # Generate URL for the lesson page
-        lesson_url = f"lessons/{current_lesson.replace('.md', '.html')}"
-        
-        return {
-            "current_lesson": current_lesson,
-            "title": title if title else Path(current_lesson).stem,
-            "url": lesson_url,
-            "last_opened": metadata.get("last_opened"),
-        }
-    except Exception as e:
-        console.print(f"[yellow]⚠️  Warning: Could not load learning data: {e}[/yellow]")
+        catalog, metadata = _load_catalog_with_progress()
+    except LearningCatalogError as exc:
+        console.print(f"[yellow]⚠️  Warning: Could not load learning data: {exc}[/yellow]")
         return None
+
+    current_lesson = get_current_lesson(metadata, catalog)
+    if not current_lesson:
+        return None
+
+    track = catalog["tracks_by_id"][current_lesson["track_id"]]
+    if track["status"] != "active" or not track.get("public", True) or not current_lesson["public"]:
+        return None
+
+    return {
+        "current_lesson_id": current_lesson["lesson_id"],
+        "lesson_title": current_lesson["title"],
+        "lesson_url": current_lesson["url"],
+        "track_id": track["track_id"],
+        "track_name": track["name"],
+        "track_url": track["url"],
+        "classification_id": track["classification"],
+        "classification_name": track.get("classification_name")
+        or track["classification"].replace("-", " ").title(),
+        "classification_url": f"classifications/{track['classification']}.html",
+        "last_opened_at": metadata.get("last_opened_at"),
+    }
+
+
+def load_all_tracks_with_status() -> List[Dict[str, Any]]:
+    """Load all public tracks with public lessons and progress metadata."""
+    catalog, metadata = _load_catalog_with_progress()
+    completed_ids = get_completed_lesson_ids(metadata)
+    current_lesson_id = metadata.get("current_lesson_id")
+
+    tracks: List[Dict[str, Any]] = []
+    for track in _public_tracks(catalog):
+        public_lessons = []
+        completed_public_count = 0
+        for lesson in _public_lessons(track):
+            lesson_copy = dict(lesson)
+            lesson_copy["status"] = _public_lesson_status(
+                lesson_copy, completed_ids, current_lesson_id
+            )
+            lesson_copy["display_title"] = (
+                f"{lesson_copy['sequence_label']}. {lesson_copy['title']}"
+            )
+            lesson_copy["track_page_url"] = f"../tracks/{track['track_id']}.html"
+            if lesson_copy["status"] == "done":
+                completed_public_count += 1
+            public_lessons.append(lesson_copy)
+
+        if public_lessons:
+            if completed_public_count == len(public_lessons):
+                public_progress_status = "done"
+            elif any(lesson["status"] == "current" for lesson in public_lessons):
+                public_progress_status = "current"
+            elif completed_public_count > 0:
+                public_progress_status = "in_progress"
+            elif track["is_unlocked"]:
+                public_progress_status = "not_started"
+            else:
+                public_progress_status = "locked"
+        else:
+            public_progress_status = track["progress_status"]
+
+        track_copy = dict(track)
+        track_copy["lessons"] = public_lessons
+        track_copy["public_lesson_count"] = len(public_lessons)
+        track_copy["completed_public_count"] = completed_public_count
+        track_copy["public_progress_status"] = public_progress_status
+        tracks.append(track_copy)
+
+    return tracks
+
+
+def group_tracks_by_classification(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group already-filtered tracks by classification for rendering."""
+    classifications_by_id: Dict[str, Dict[str, Any]] = {}
+    classifications: List[Dict[str, Any]] = []
+
+    for track in tracks:
+        classification_id = track["classification"]
+        classification = classifications_by_id.get(classification_id)
+        if classification is None:
+            classification = {
+                "classification_id": classification_id,
+                "classification_name": track.get("classification_name")
+                or classification_id.replace("-", " ").title(),
+                "url": f"classifications/{classification_id}.html",
+                "tracks": [],
+                "track_count": 0,
+                "lesson_count": 0,
+            }
+            classifications_by_id[classification_id] = classification
+            classifications.append(classification)
+
+        classification["tracks"].append(track)
+        classification["track_count"] += 1
+        classification["lesson_count"] += track["public_lesson_count"]
+
+    return classifications
 
 
 def load_all_lessons_with_status() -> List[Dict[str, Any]]:
-    """
-    Load all lessons with their status information.
-    
-    Returns:
-        List of lessons with status, title, and navigation info
-    """
-    import re
-    
-    mystuff_dir = get_mystuff_dir()
-    learning_dir = mystuff_dir / "learning"
-    lessons_dir = learning_dir / "lessons"
-    metadata_path = learning_dir / "metadata.yaml"
-    
-    if not lessons_dir.exists():
-        return []
-    
-    # Load metadata
-    metadata = {}
-    if metadata_path.exists():
-        try:
-            with open(metadata_path, "r", encoding="utf-8") as f:
-                metadata = yaml.safe_load(f) or {}
-        except Exception:
-            pass
-    
-    current_lesson = metadata.get("current_lesson")
-    
-    # Normalize current lesson to include .md extension
-    if current_lesson:
-        current_lesson = str(current_lesson)
-        if not current_lesson.endswith('.md'):
-            current_lesson = f"{current_lesson}.md"
-    
-    # Handle both old format (list of strings) and new format (list of dicts)
-    # Normalize all to include .md extension
-    completed_raw = metadata.get("completed_lessons", [])
-    if completed_raw and isinstance(completed_raw[0], dict):
-        completed_lessons = set()
-        for item in completed_raw:
-            name = str(item["name"])
-            if not name.endswith('.md'):
-                name = f"{name}.md"
-            completed_lessons.add(name)
-    else:
-        completed_lessons = set()
-        for item in (completed_raw if completed_raw else []):
-            name = str(item)
-            if not name.endswith('.md'):
-                name = f"{name}.md"
-            completed_lessons.add(name)
-    
-    # Get all lessons with numeric format
-    lessons = []
-    for file_path in sorted(lessons_dir.glob("**/*.md")):
-        # Check if filename has numeric format
-        if not re.match(r'^\d+', file_path.name):
-            continue
-        
-        rel_path = file_path.relative_to(lessons_dir)
-        lesson_name = str(rel_path)
-        
-        # Determine status (lesson_name already has .md extension)
-        if lesson_name in completed_lessons:
-            status = "done"
-        elif lesson_name == current_lesson:
-            status = "current"
-        else:
-            status = "todo"
-        
-        # Extract title from file and check public attribute
-        title = None
-        topic = None
-        lesson_number = None
-        general_topic = None
-        difficulty = None
-        try:
-            with open(file_path, "r", encoding="utf-8") as f:
-                content = f.read()
-            
-            # Extract frontmatter and check public attribute
-            frontmatter, content_without_frontmatter = extract_frontmatter(content)
-            
-            # Check public attribute in frontmatter (case-insensitive)
-            if frontmatter:
-                # Check for both "public" (lowercase) and "Public" (uppercase)
-                public = None
-                if "public" in frontmatter:
-                    public = frontmatter["public"]
-                elif "Public" in frontmatter:
-                    public = frontmatter["Public"]
-                
-                # If public is explicitly set to false, skip this lesson
-                if public is False:
-                    continue
-                # If public is true or doesn't exist, include it (default behavior)
-                
-                # Use frontmatter fields first if available
-                title = frontmatter.get("lesson_title") or frontmatter.get("title")
-                topic = frontmatter.get("topic")
-                lesson_number = frontmatter.get("lesson_number")
-                general_topic = frontmatter.get("general_topic")
-                difficulty = frontmatter.get("difficulty")
-            
-            # Fallback to extracting from content if not in frontmatter
-            if not title:
-                title = extract_lesson_title(content_without_frontmatter)
-            if not topic:
-                topic = extract_lesson_topic(content_without_frontmatter)
-            
-        except Exception:
-            pass
-        
-        # Fallback title from filename
-        if not title:
-            lesson_stem = file_path.stem
-            title = re.sub(r'^\d+-?', '', lesson_stem)
-            title = title.replace('-', ' ').replace('_', ' ').title()
-        
-        # Generate URL for the lesson page
-        lesson_url = f"lessons/{str(rel_path).replace('.md', '.html')}"
-        
-        # Create formatted display title: Day ${lesson_number}: ${lesson_title} (${topic})
-        display_title = title  # Default fallback
-        if lesson_number and title:
-            # Format lesson_number as 3-digit string (001, 002, etc.)
-            try:
-                formatted_number = str(int(lesson_number)).zfill(3)
-            except (ValueError, TypeError):
-                # If lesson_number is not a valid number, use as-is
-                formatted_number = str(lesson_number).zfill(3)
-            
-            if topic:
-                display_title = f"Day {formatted_number}: {title} ({topic})"
-            else:
-                display_title = f"Day {formatted_number}: {title}"
-        
-        lessons.append({
-            "name": lesson_name,
-            "title": title,
-            "display_title": display_title,  # New formatted title for display
-            "status": status,
-            "path": str(rel_path),
-            "filename": file_path.name,
-            "url": lesson_url,
-            "topic": topic,
-            "lesson_number": lesson_number,  # Add lesson_number field
-            "general_topic": general_topic,  # Add general_topic field
-            "difficulty": difficulty,  # Add difficulty field
-        })
-    
-    # Sort by path (preserves directory structure order: 01/01/01.md, 01/01/02.md, etc.)
-    lessons.sort(key=lambda x: x["path"])
-    
+    """Load all public lessons with status information."""
+    lessons: List[Dict[str, Any]] = []
+    for track in load_all_tracks_with_status():
+        for lesson in track["lessons"]:
+            lesson_copy = dict(lesson)
+            lesson_copy["track_name"] = track["name"]
+            lesson_copy["track_id"] = track["track_id"]
+            lessons.append(lesson_copy)
+
     return lessons
 
 
@@ -672,197 +682,236 @@ def render_template(
         raise typer.Exit(1)
 
 
-def generate_lesson_pages(output_dir: Path, config: Dict[str, Any], generated_at: str) -> None:
-    """Generate HTML pages for all lessons."""
-    import markdown
-    
-    mystuff_dir = get_mystuff_dir()
-    learning_dir = mystuff_dir / "learning"
-    lessons_dir = learning_dir / "lessons"
-    
-    if not lessons_dir.exists():
-        console.print("  ℹ️  No lessons directory found, skipping lesson pages")
+def _render_lesson_markdown(
+    lesson: Dict[str, Any], known_lesson_paths: set[str]
+) -> str:
+    lesson_path = get_mystuff_dir() / "learning" / "lessons" / lesson["path"]
+    with open(lesson_path, "r", encoding="utf-8") as handle:
+        md_content = handle.read()
+
+    _, content_without_frontmatter = extract_frontmatter(md_content)
+    md = markdown.Markdown(
+        extensions=[
+            "fenced_code",
+            "tables",
+            "codehilite",
+            LessonLinkRewriteExtension(
+                source_lesson_path=Path(lesson["path"]),
+                known_lesson_paths=known_lesson_paths,
+            ),
+        ],
+        tab_length=2,
+    )
+    return md.convert(content_without_frontmatter)
+
+
+def _relative_output_path(source_path: str) -> str:
+    return source_path.replace(".md", ".html")
+
+
+def _relative_link_between(source_path: str, target_path: str) -> str:
+    source_html = _relative_output_path(source_path)
+    target_html = _relative_output_path(target_path)
+    source_dir = posixpath.dirname(source_html) or "."
+    return posixpath.relpath(target_html, start=source_dir)
+
+
+def generate_classification_pages(
+    output_dir: Path,
+    config: Dict[str, Any],
+    generated_at: str,
+    classifications: List[Dict[str, Any]],
+) -> None:
+    """Generate one public page per classification."""
+    if not classifications:
+        console.print("  ℹ️  No public classifications found, skipping classification pages")
         return
-    
-    # Create lessons output directory
-    lessons_output = output_dir / "lessons"
-    lessons_output.mkdir(exist_ok=True)
-    
-    # Get all lessons with status
-    all_lessons = load_all_lessons_with_status()
-    
-    if not all_lessons:
-        console.print("  ℹ️  No lessons found")
-        return
-    
-    console.print(f"  📚 Generating {len(all_lessons)} lesson pages...")
-    known_lesson_paths = {lesson["path"] for lesson in all_lessons}
-    
-    # Generate HTML for each lesson
-    for idx, lesson in enumerate(all_lessons):
-        lesson_path = lessons_dir / lesson["path"]
-        
-        if not lesson_path.exists():
-            continue
-        
-        # Read and process markdown
-        with open(lesson_path, "r", encoding="utf-8") as f:
-            md_content = f.read()
-        
-        # Extract frontmatter and check public attribute
-        frontmatter, content_without_frontmatter = extract_frontmatter(md_content)
-        
-        # Check public attribute in frontmatter (case-insensitive)
-        if frontmatter:
-            # Check for both "public" (lowercase) and "Public" (uppercase)
-            public = None
-            if "public" in frontmatter:
-                public = frontmatter["public"]
-            elif "Public" in frontmatter:
-                public = frontmatter["Public"]
-            
-            # If public is explicitly set to false, skip generating HTML for this lesson
-            if public is False:
-                continue
-            # If public is true or doesn't exist, generate it (default behavior)
-        
-        # Convert markdown to HTML with syntax highlighting (use content without frontmatter)
-        md = markdown.Markdown(
-            extensions=[
-                "fenced_code",
-                "tables",
-                "codehilite",
-                LessonLinkRewriteExtension(
-                    source_lesson_path=Path(lesson["path"]),
-                    known_lesson_paths=known_lesson_paths,
-                ),
-            ],
-            tab_length=2  # Support 2-space indentation for nested lists
+
+    classifications_output = output_dir / "classifications"
+    classifications_output.mkdir(exist_ok=True)
+
+    console.print(f"  🗂️  Generating {len(classifications)} classification pages...")
+    for classification in classifications:
+        output_path = (
+            classifications_output
+            / f"{classification['classification_id']}.html"
         )
-        lesson_html = md.convert(content_without_frontmatter)
-        
-        # Determine prev/next lessons
-        prev_lesson_data = all_lessons[idx - 1] if idx > 0 else None
-        next_lesson_data = all_lessons[idx + 1] if idx < len(all_lessons) - 1 else None
-        
-        # Calculate relative path to root based on depth
-        # The lesson will be at lessons/{path}, so we need to count all directory levels
-        # For example: lessons/01/01/01.html needs ../../../ (3 levels up)
-        lesson_rel_path = Path(lesson["path"])
-        current_dir = lesson_rel_path.parent
-        # Count directories in the relative path (excluding filename)
-        depth = len(lesson_rel_path.parts) - 1
-        # Add 1 for the "lessons" directory itself
-        depth += 1
-        relative_root = "../" * depth if depth > 0 else "./"
-        
-        # Calculate relative URLs for prev/next lessons
-        prev_lesson = None
-        if prev_lesson_data:
-            prev_path = Path(prev_lesson_data["path"])
-            prev_dir = prev_path.parent
-            
-            # If same directory, just use filename
-            if current_dir == prev_dir:
-                relative_prev = prev_path.name.replace(".md", ".html")
-            else:
-                # Calculate relative path between directories
-                # Count how many levels to go up from current
-                up_levels = len(current_dir.parts)
-                # Then go down to target directory
-                relative_prev = ("../" * up_levels) + str(prev_path).replace(".md", ".html")
-            
-            prev_lesson = {
-                "url": relative_prev,
-                "title": prev_lesson_data["title"]
-            }
-        
-        next_lesson = None
-        if next_lesson_data:
-            next_path = Path(next_lesson_data["path"])
-            next_dir = next_path.parent
-            
-            # If same directory, just use filename
-            if current_dir == next_dir:
-                relative_next = next_path.name.replace(".md", ".html")
-            else:
-                # Calculate relative path between directories
-                # Count how many levels to go up from current
-                up_levels = len(current_dir.parts)
-                # Then go down to target directory
-                relative_next = ("../" * up_levels) + str(next_path).replace(".md", ".html")
-            
-            next_lesson = {
-                "url": relative_next,
-                "title": next_lesson_data["title"]
-            }
-        
-        # Prepare context
         context = {
             "title": config.get("title", "My Knowledge Base"),
             "description": config.get("description", "Personal knowledge management"),
             "author": config.get("author", "Your Name"),
             "menu_items": config.get("menu_items", []),
-            "lesson_title": lesson["title"],
-            "lesson_content": lesson_html,  # Changed from lesson_html to lesson_content
-            "prev_lesson": prev_lesson,
-            "next_lesson": next_lesson,
-            "relative_root": relative_root,
+            "classification": classification,
+            "tracks": classification["tracks"],
+            "relative_root": "../",
             "generated_at": generated_at,
         }
-        
-        # Generate output path
-        output_filename = lesson["path"].replace(".md", ".html")
-        output_path = lessons_output / output_filename
-        
-        # Create parent directories if needed
-        output_path.parent.mkdir(parents=True, exist_ok=True)
-        
-        # Render template
-        render_template("lesson.html", context, output_path)
-    
+        render_template("classification.html", context, output_path)
+
+    console.print(f"  ✅ Generated {len(classifications)} classification pages")
+
+
+def generate_track_pages(
+    output_dir: Path,
+    config: Dict[str, Any],
+    generated_at: str,
+    tracks: List[Dict[str, Any]],
+) -> None:
+    """Generate one public page per track."""
+    if not tracks:
+        console.print("  ℹ️  No public tracks found, skipping track pages")
+        return
+
+    tracks_output = output_dir / "tracks"
+    tracks_output.mkdir(exist_ok=True)
+
+    console.print(f"  🧱 Generating {len(tracks)} track pages...")
+    for track in tracks:
+        output_path = tracks_output / f"{track['track_id']}.html"
+        context = {
+            "title": config.get("title", "My Knowledge Base"),
+            "description": config.get("description", "Personal knowledge management"),
+            "author": config.get("author", "Your Name"),
+            "menu_items": config.get("menu_items", []),
+            "track": track,
+            "classification": {
+                "classification_id": track["classification"],
+                "classification_name": track.get("classification_name")
+                or track["classification"].replace("-", " ").title(),
+                "url": f"../classifications/{track['classification']}.html",
+            },
+            "lessons": track["lessons"],
+            "relative_root": "../",
+            "generated_at": generated_at,
+        }
+        render_template("track.html", context, output_path)
+
+    console.print(f"  ✅ Generated {len(tracks)} track pages")
+
+
+def generate_lesson_pages(
+    output_dir: Path,
+    config: Dict[str, Any],
+    generated_at: str,
+    tracks: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    """Generate public HTML pages for all published lessons."""
+    if tracks is None:
+        tracks = load_all_tracks_with_status()
+
+    if not tracks:
+        console.print("  ℹ️  No public lessons found")
+        return
+
+    lessons_output = output_dir / "lessons"
+    lessons_output.mkdir(exist_ok=True)
+    all_lessons = [lesson for track in tracks for lesson in track["lessons"]]
+    known_lesson_paths = {lesson["path"] for lesson in all_lessons}
+
+    console.print(f"  📚 Generating {len(all_lessons)} lesson pages...")
+    for track in tracks:
+        track_lessons = track["lessons"]
+        for index, lesson in enumerate(track_lessons):
+            lesson_html = _render_lesson_markdown(lesson, known_lesson_paths)
+            prev_lesson_data = track_lessons[index - 1] if index > 0 else None
+            next_lesson_data = (
+                track_lessons[index + 1]
+                if index < len(track_lessons) - 1
+                else None
+            )
+
+            relative_root = "../" * len(Path(lesson["path"]).parts)
+            prev_lesson = None
+            if prev_lesson_data:
+                prev_lesson = {
+                    "url": _relative_link_between(
+                        lesson["path"], prev_lesson_data["path"]
+                    ),
+                    "title": prev_lesson_data["title"],
+                }
+
+            next_lesson = None
+            if next_lesson_data:
+                next_lesson = {
+                    "url": _relative_link_between(
+                        lesson["path"], next_lesson_data["path"]
+                    ),
+                    "title": next_lesson_data["title"],
+                }
+
+            context = {
+                "title": config.get("title", "My Knowledge Base"),
+                "description": config.get("description", "Personal knowledge management"),
+                "author": config.get("author", "Your Name"),
+                "menu_items": config.get("menu_items", []),
+                "lesson": lesson,
+                "track": track,
+                "classification": {
+                    "classification_id": track["classification"],
+                    "classification_name": track.get("classification_name")
+                    or track["classification"].replace("-", " ").title(),
+                    "url": f"{relative_root}classifications/{track['classification']}.html",
+                },
+                "lesson_title": lesson["title"],
+                "lesson_content": lesson_html,
+                "prev_lesson": prev_lesson,
+                "next_lesson": next_lesson,
+                "track_page_url": f"{relative_root}tracks/{track['track_id']}.html",
+                "classification_page_url": (
+                    f"{relative_root}classifications/{track['classification']}.html"
+                ),
+                "relative_root": relative_root,
+                "generated_at": generated_at,
+            }
+
+            output_path = lessons_output / _relative_output_path(lesson["path"])
+            output_path.parent.mkdir(parents=True, exist_ok=True)
+            render_template("lesson.html", context, output_path)
+
     console.print(f"  ✅ Generated {len(all_lessons)} lesson pages")
 
 
 def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     """Generate a static website."""
+    from datetime import datetime, timezone
+
     console.print("\n🚀 Generating static website...")
     console.print(f"📁 Output directory: {output_dir}\n")
-    
-    # Create directory structure
+
     ensure_output_structure(output_dir)
-    
-    # Copy static files
+
     console.print("\n📦 Copying static files...")
     copy_static_files(output_dir)
-    
-    # Fetch GitHub repositories if username and repo list are configured
+
     repos = []
     github_username = config.get("github_username")
     repo_names = config.get("repositories", [])
-    
     if github_username and repo_names:
         console.print(f"\n🐙 Fetching repository details for @{github_username}...")
         repos = fetch_github_repo_details(github_username, repo_names)
         console.print(f"  ✅ Found {len(repos)} repositories")
-    
-    # Load links from mystuff
+
     console.print("\n📚 Loading links...")
     links = load_mystuff_links()
     console.print(f"  ✅ Loaded {len(links)} links")
-    
-    # Load learning data
+
     console.print("\n📖 Loading learning data...")
     learning = load_learning_data()
     if learning:
-        console.print(f"  ✅ Current lesson: {learning['title']}")
+        console.print(
+            f"  ✅ Current lesson: {learning['track_id']}/{learning['current_lesson_id']}"
+        )
     else:
-        console.print("  ℹ️  No current lesson found")
-    
-    # Prepare context for templates
-    from datetime import datetime
-    generated_at = datetime.utcnow().strftime("%Y-%m-%d %H:%M UTC")
-    
+        console.print("  ℹ️  No current published lesson found")
+
+    console.print("\n🧱 Loading tracks...")
+    tracks = load_all_tracks_with_status()
+    console.print(f"  ✅ Found {len(tracks)} public tracks")
+    classifications = group_tracks_by_classification(tracks)
+    console.print(f"  ✅ Grouped into {len(classifications)} classifications")
+
+    generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
     context = {
         "title": config.get("title", "My Knowledge Base"),
         "description": config.get("description", "Personal knowledge management"),
@@ -872,14 +921,14 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         "repositories": repos,
         "links_json": json.dumps(links),
         "learning": learning,
+        "tracks": tracks,
+        "classifications": classifications,
         "generated_at": generated_at,
     }
-    
-    # Generate index.html
+
     console.print("\n📝 Generating HTML pages...")
     render_template("index.html", context, output_dir / "index.html")
-    
-    # Generate links.html (if template exists)
+
     links_template = get_templates_dir() / "links.html"
     if links_template.exists():
         render_template("links.html", context, output_dir / "links.html")
@@ -887,32 +936,35 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         console.print(
             "[yellow]  ⚠️  Skipping links.html (template not found)[/yellow]"
         )
-    
-    # Load all lessons with status
-    console.print("\n📖 Loading lessons...")
-    all_lessons = load_all_lessons_with_status()
-    console.print(f"  ✅ Found {len(all_lessons)} lessons")
-    
-    # Generate learning.html (if template exists)
+
     learning_template = get_templates_dir() / "learning.html"
-    if learning_template.exists() and all_lessons:
-        lessons_context = context.copy()
-        lessons_context["lessons"] = all_lessons
-        lessons_context["lessons_json"] = json.dumps(all_lessons)
-        render_template("learning.html", lessons_context, output_dir / "learning.html")
-        
-        # Generate individual lesson pages
-        generate_lesson_pages(output_dir, config, generated_at)
+    if learning_template.exists():
+        render_template("learning.html", context, output_dir / "learning.html")
     else:
-        if not learning_template.exists():
-            console.print(
-                "[yellow]  ⚠️  Skipping learning.html (template not found)[/yellow]"
-            )
-        if not all_lessons:
-            console.print(
-                "  ℹ️  No lessons to generate"
-            )
-    
+        console.print(
+            "[yellow]  ⚠️  Skipping learning.html (template not found)[/yellow]"
+        )
+
+    classification_template = get_templates_dir() / "classification.html"
+    if classification_template.exists():
+        generate_classification_pages(
+            output_dir, config, generated_at, classifications
+        )
+    else:
+        console.print(
+            "[yellow]  ⚠️  Skipping classification pages (template not found)[/yellow]"
+        )
+
+    track_template = get_templates_dir() / "track.html"
+    if track_template.exists():
+        generate_track_pages(output_dir, config, generated_at, tracks)
+    else:
+        console.print(
+            "[yellow]  ⚠️  Skipping track pages (template not found)[/yellow]"
+        )
+
+    generate_lesson_pages(output_dir, config, generated_at, tracks=tracks)
+
     console.print("\n✨ Website generation complete!")
     console.print(f"\n🌐 Open {output_dir / 'index.html'} in your browser\n")
 

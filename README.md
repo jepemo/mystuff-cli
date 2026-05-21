@@ -68,8 +68,13 @@ pip install -e .
 ├── wiki/elixir‑patterns.md
 ├── lists/reading.yaml
 ├── learning/
-│   ├── lessons/          # your learning materials (markdown)
-│   └── metadata.yaml     # progress tracking
+│   ├── lessons/
+│   │   ├── README.md
+│   │   └── foundations/
+│   │       ├── TRACK.md
+│   │       ├── 001.md
+│   │       └── 002.md
+│   └── metadata.yaml     # schema v2 progress tracking by lesson_id
 └── config.yaml
 ```
 
@@ -77,26 +82,41 @@ All data is stored as plain text for transparency and portability.
 
 ## Learning Management
 
-The `learn` module helps you track and study educational materials:
+The `learn` module is track-aware: every track lives in
+`learning/lessons/<track_id>/`, exposes track metadata through `TRACK.md`, and
+stores real lessons as `001.md`, `002.md`, and so on. Tracks are grouped by
+`classification`, so the main catalog now flows as `classification -> track ->
+lesson`.
 
 ```bash
-# List all lessons
+# List visible tracks grouped by classification
 mystuff learn list
 
-# Start a lesson
-mystuff learn start python/01-variables.md
+# Inspect lessons inside a track
+mystuff learn list --track foundations
+
+# Filter the catalog to one classification
+mystuff learn list --classification systems-thinking
+
+# Start or resume a track
+mystuff learn start foundations
 
 # Open current lesson in web browser (opens configured web URL)
 mystuff learn current --web
 
-# Complete and move to next lesson
-mystuff learn next --web
+# Complete current lesson and advance within the same track
+mystuff learn next
 
 # View your progress
 mystuff learn stats
 ```
 
-The `--web` option opens your lesson in the default browser using the URL configured in `config.yaml` under `generate.web.url`. This allows you to view your generated static website with syntax highlighting, responsive design, and your custom theme.
+Important behavior:
+
+- `mystuff learn start <track_id>` resumes the first pending lesson in that track.
+- `mystuff learn next` never jumps across tracks; when a track ends it suggests newly unlocked tracks.
+- Progress is stored in `learning/metadata.yaml` with `schema_version: 2`, `current_lesson_id`, and `completed_lessons` keyed by `lesson_id`.
+- `mystuff learn current --web` opens the published lesson URL from `config.yaml` under `generate.web.url`.
 
 ## Static Website Generation
 
@@ -122,6 +142,7 @@ Configure the website in `~/.mystuff/config.yaml`:
 generate:
   web:
     output: "~/mystuff_web"
+    url: "https://example.com/mystuff"
     title: "My Knowledge Base"
     description: "Personal knowledge management"
     author: "Your Name"
@@ -141,12 +162,13 @@ generate:
 
 Features:
 
-- **Elegant jepemo.github.io-inspired design** – Minimal, professional aesthetic
-- **Roboto Mono typography** – Clean, readable monospace font
-- **Dot pattern background** – Subtle visual texture (#F5F5F0 beige)
+- **Classification hub** – `learning.html` is now the top-level directory of classifications
+- **Intermediate classification pages** – each classification gets its own page listing the tracks inside it
+- **Minimal track pages** – each track page now acts as a clean syllabus of lessons
+- **Intra-track lesson navigation** – prev/next stays inside the active track
+- **Minimal brutalist curriculum UI** – public pages show only the key metadata needed to keep moving
 - **GitHub integration** – Display your chosen repositories with automatic data fetching
 - **User-controlled repo list** – Specify exactly which repos to show and in what order
-- **Sidebar navigation** – Configurable menu with hover states (#558ad8 blue accent)
 - **Responsive layout** – Mobile-friendly design
 - **No authentication required** – Uses public GitHub REST API
 - **Force mode** – Use `-f` flag to skip overwrite confirmation

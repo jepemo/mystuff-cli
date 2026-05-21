@@ -1,154 +1,71 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-skin="clean" data-theme="system">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@{{ author }}</title>
+    <title>Learning - @{{ author }}</title>
     <link rel="shortcut icon" href="favicon.ico" />
     <link rel="stylesheet" href="css/style.css" />
+      <script src="{{ relative_root|default('') }}js/site.js" defer></script>
   </head>
   <body>
     <h1>Learning</h1>
 
     <nav>
-      <a href="index.html">Home</a> | <a href="learning.html">Learning</a> |
-      <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} | 
+      <a href="index.html">Home</a> |
+      <a href="learning.html">Learning</a> |
+      <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} |
       <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
     </nav>
 
-    <main>
-      <p>Structured learning materials and notes organized by topic.</p>
+    <main class="learning-hub">
+      <section class="stack-block">
+        <p class="page-kicker">CURRICULUM</p>
+        <p>
+          Explore the curriculum by classification, then enter each track for the
+          full syllabus and lessons.
+        </p>
+      </section>
 
-      <form action="#" method="get">
-        <label for="search">Search lessons:</label>
-        <input
-          type="search"
-          id="search"
-          name="search"
-          placeholder="Type to search..."
-        />
+      {% if learning %}
+      <section class="stack-block learning-hero">
+        <p class="page-kicker">CONTINUE LEARNING</p>
+        <h2><a href="{{ learning.lesson_url }}">{{ learning.lesson_title }}</a></h2>
+        <p class="hero-context">
+          <a href="{{ learning.classification_url }}">{{ learning.classification_name }}</a>
+          / <a href="{{ learning.track_url }}">{{ learning.track_name }}</a>
+        </p>
+        <p><a class="cta-link" href="{{ learning.lesson_url }}">Open current lesson</a></p>
+      </section>
+      {% endif %}
 
-        <label for="filter">Status:</label>
-        <select id="filter" name="filter">
-          <option value="all">All Lessons</option>
-          <option value="current">Current</option>
-          <option value="done">Done</option>
-          <option value="todo">To Do</option>
-        </select>
-
-        <label for="general-topic-filter">General Topic:</label>
-        <select id="general-topic-filter" name="general-topic-filter">
-          <option value="all">All Topics</option>
-        </select>
-
-        <label for="difficulty-filter">Difficulty:</label>
-        <select id="difficulty-filter" name="difficulty-filter">
-          <option value="all">All Levels</option>
-          <option value="beginner">Beginner</option>
-          <option value="intermediate">Intermediate</option>
-          <option value="advanced">Advanced</option>
-        </select>
-      </form>
-
-      {% if lessons %}
-      <h2>Lessons ({{ lessons|length }} total)</h2>
-      <ul>
-        {% for lesson in lessons %}
-        <li data-topic="{{ lesson.topic|default('') }}" data-status="{{ lesson.status|default('') }}" data-general-topic="{{ lesson.general_topic|default('') }}" data-difficulty="{{ lesson.difficulty|default('') }}">
-          <strong><a href="{{ lesson.url }}">{{ lesson.display_title|default(lesson.title) }}</a></strong>
-          {% if lesson.status %} {% if lesson.status == 'done' %} [DONE]{% endif %} {%
-          if lesson.status == 'current' %} [CURRENT]{% endif %} {% if
-          lesson.status == 'todo' %} [TODO]{% endif %} {% endif %} {% if
-          lesson.description %}
-          <br />{{ lesson.description }} {% endif %}
-        </li>
-        {% endfor %}
-      </ul>
+      {% if classifications %}
+      <section class="stack-block">
+        <p class="page-kicker">CLASSIFICATIONS</p>
+        <div class="classification-grid">
+          {% for classification in classifications %}
+          <article class="classification-card">
+            <p class="status-badge">[{{ classification.track_count }} TRACKS]</p>
+            <h2><a href="{{ classification.url }}">{{ classification.classification_name }}</a></h2>
+            <p>{{ classification.lesson_count }} lessons across this classification.</p>
+            <p><a class="cta-link" href="{{ classification.url }}">Browse tracks</a></p>
+          </article>
+          {% endfor %}
+        </div>
+      </section>
       {% else %}
-      <p>
-        No lessons found. Add some markdown files to your learning directory.
-      </p>
+      <section class="stack-block">
+        <p>No public classifications found.</p>
+      </section>
       {% endif %}
     </main>
 
-    <script>
-      // Simple search and filter functionality
-      document.addEventListener("DOMContentLoaded", function () {
-        const searchInput = document.getElementById("search");
-        const filterSelect = document.getElementById("filter");
-        const generalTopicFilter = document.getElementById("general-topic-filter");
-        const difficultyFilter = document.getElementById("difficulty-filter");
-        const lessonItems = document.querySelectorAll("main ul li");
-
-        // Populate general topic filter options dynamically
-        function populateGeneralTopicFilter() {
-          const generalTopics = new Set();
-          lessonItems.forEach(function (item) {
-            const generalTopic = item.getAttribute("data-general-topic");
-            if (generalTopic && generalTopic.trim() !== "") {
-              generalTopics.add(generalTopic);
-            }
-          });
-          
-          // Add unique general topics to the filter
-          generalTopics.forEach(function (topic) {
-            const option = document.createElement("option");
-            option.value = topic.toLowerCase();
-            option.textContent = topic;
-            generalTopicFilter.appendChild(option);
-          });
-        }
-
-        function filterLessons() {
-          const searchTerm = searchInput.value.toLowerCase();
-          const filterValue = filterSelect.value;
-          const generalTopicValue = generalTopicFilter.value;
-          const difficultyValue = difficultyFilter.value;
-
-          lessonItems.forEach(function (item) {
-            const text = item.textContent.toLowerCase();
-            const itemStatus = item.getAttribute("data-status") || "";
-            const itemGeneralTopic = (item.getAttribute("data-general-topic") || "").toLowerCase();
-            const itemDifficulty = (item.getAttribute("data-difficulty") || "").toLowerCase();
-            
-            const matchesSearch = text.includes(searchTerm);
-            
-            let matchesStatusFilter = true;
-            if (filterValue !== "all") {
-              matchesStatusFilter = itemStatus === filterValue;
-            }
-
-            let matchesGeneralTopicFilter = true;
-            if (generalTopicValue !== "all") {
-              matchesGeneralTopicFilter = itemGeneralTopic === generalTopicValue;
-            }
-
-            let matchesDifficultyFilter = true;
-            if (difficultyValue !== "all") {
-              matchesDifficultyFilter = itemDifficulty === difficultyValue;
-            }
-
-            if (matchesSearch && matchesStatusFilter && matchesGeneralTopicFilter && matchesDifficultyFilter) {
-              item.style.display = "list-item";
-            } else {
-              item.style.display = "none";
-            }
-          });
-        }
-
-        // Initialize general topic filter
-        populateGeneralTopicFilter();
-
-        searchInput.addEventListener("input", filterLessons);
-        filterSelect.addEventListener("change", filterLessons);
-        generalTopicFilter.addEventListener("change", filterLessons);
-        difficultyFilter.addEventListener("change", filterLessons);
-      });
-    </script>
-
-    <hr>
+    <hr />
     <footer>
-        <p>Generated on {{ generated_at }} | @{{ author }} | Built with <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a></p>
+      <p>
+        Generated on {{ generated_at }} | @{{ author }} | Built with
+        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
+      </p>
     </footer>
   </body>
 </html>
