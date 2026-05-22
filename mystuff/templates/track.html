@@ -1,73 +1,50 @@
-<!DOCTYPE html>
-<html lang="en" data-skin="clean" data-theme="system">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ track.name }} - @{{ author }}</title>
-    <link rel="shortcut icon" href="{{ relative_root }}favicon.ico" />
-    <link rel="stylesheet" href="{{ relative_root }}css/style.css" />
-      <script src="{{ relative_root|default('') }}js/site.js" defer></script>
-  </head>
-  <body>
-    <h1>{{ track.name }}</h1>
+{% extends "base.html" %}
 
-    <nav>
-      <a href="{{ relative_root }}index.html">Home</a> |
-      <a href="{{ relative_root }}learning.html">Learning</a> |
-      <a href="{{ relative_root }}links.html">Links</a>{% if menu_items %}{% for item in menu_items %} |
-      <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
-    </nav>
+{% block page_title %}{{ track.name }} - @{{ author }}{% endblock %}
+{% block main_class %}track-page{% endblock %}
 
-    <main class="track-page">
-      <section class="stack-block">
-        <p class="breadcrumb">
-          <a href="{{ relative_root }}learning.html">Classifications</a>
-          /
-          <a href="{{ classification.url }}">{{ classification.classification_name }}</a>
-          /
-          {{ track.name }}
-        </p>
-        <p class="page-kicker">TRACK</p>
-        {% if track.description %}
-        <p>{{ track.description }}</p>
+{% block content %}
+<h1>{{ track.name }}</h1>
+
+<section class="stack-block">
+  <p class="breadcrumb">
+    <a href="{{ relative_root }}learning.html">Classifications</a>
+    /
+    <a href="{{ classification.url }}">{{ classification.classification_name }}</a>
+    /
+    {{ track.name }}
+  </p>
+  <p class="page-kicker">TRACK</p>
+  {% if track.description %}
+  <p>{{ track.description }}</p>
+  {% endif %}
+  <p>{{ track.public_lesson_count }} lessons</p>
+</section>
+
+<section class="stack-block">
+  <p class="page-kicker">LESSONS</p>
+  {% if lessons %}
+  <ol class="lesson-syllabus">
+    {% for lesson in lessons %}
+    <li class="lesson-syllabus-item lesson-syllabus-item-{{ lesson.status }}">
+      <div class="lesson-syllabus-number">{{ lesson.sequence_label }}</div>
+      <div class="lesson-syllabus-main">
+        <a href="../{{ lesson.url }}">{{ lesson.title }}</a>
+        {% if lesson.lesson_kind != 'lesson' %}
+        <span class="inline-badge">{{ lesson.lesson_kind|replace('_', ' ')|upper }}</span>
         {% endif %}
-        <p>{{ track.public_lesson_count }} lessons</p>
-      </section>
+        <p class="lesson-syllabus-meta">{{ lesson.estimated_time or '-' }} min</p>
+      </div>
+      <div class="lesson-syllabus-status">[{{ lesson.status|upper }}]</div>
+    </li>
+    {% endfor %}
+  </ol>
+  {% else %}
+  <p>No public lessons available in this track.</p>
+  {% endif %}
+</section>
 
-      <section class="stack-block">
-        <p class="page-kicker">LESSONS</p>
-        {% if lessons %}
-        <ol class="lesson-syllabus">
-          {% for lesson in lessons %}
-          <li class="lesson-syllabus-item lesson-syllabus-item-{{ lesson.status }}">
-            <div class="lesson-syllabus-number">{{ lesson.sequence_label }}</div>
-            <div class="lesson-syllabus-main">
-              <a href="../{{ lesson.url }}">{{ lesson.title }}</a>
-              {% if lesson.lesson_kind != 'lesson' %}
-              <span class="inline-badge">{{ lesson.lesson_kind|replace('_', ' ')|upper }}</span>
-              {% endif %}
-              <p class="lesson-syllabus-meta">{{ lesson.estimated_time or '-' }} min</p>
-            </div>
-            <div class="lesson-syllabus-status">[{{ lesson.status|upper }}]</div>
-          </li>
-          {% endfor %}
-        </ol>
-        {% else %}
-        <p>No public lessons available in this track.</p>
-        {% endif %}
-      </section>
-
-      <section class="stack-block">
-        <p><a href="{{ classification.url }}">← Back to {{ classification.classification_name }}</a></p>
-      </section>
-    </main>
-
-    <hr />
-    <footer>
-      <p>
-        Generated on {{ generated_at }} | @{{ author }} | Built with
-        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
-      </p>
-    </footer>
-  </body>
-</html>
+<section class="stack-block">
+  <p><a href="{{ classification.url }}">← Back to {{ classification.classification_name }}</a></p>
+</section>
+{% endblock %}

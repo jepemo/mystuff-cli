@@ -1,68 +1,45 @@
-<!DOCTYPE html>
-<html lang="en" data-skin="clean" data-theme="system">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>{{ classification.classification_name }} - @{{ author }}</title>
-    <link rel="shortcut icon" href="{{ relative_root }}favicon.ico" />
-    <link rel="stylesheet" href="{{ relative_root }}css/style.css" />
-      <script src="{{ relative_root|default('') }}js/site.js" defer></script>
-  </head>
-  <body>
-    <h1>{{ classification.classification_name }}</h1>
+{% extends "base.html" %}
 
-    <nav>
-      <a href="{{ relative_root }}index.html">Home</a> |
-      <a href="{{ relative_root }}learning.html">Learning</a> |
-      <a href="{{ relative_root }}links.html">Links</a>{% if menu_items %}{% for item in menu_items %} |
-      <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
-    </nav>
+{% block page_title %}{{ classification.classification_name }} - @{{ author }}{% endblock %}
+{% block main_class %}classification-page{% endblock %}
 
-    <main class="classification-page">
-      <section class="stack-block">
-        <p class="breadcrumb">
-          <a href="{{ relative_root }}learning.html">Learning</a>
-          /
-          {{ classification.classification_name }}
+{% block content %}
+<h1>{{ classification.classification_name }}</h1>
+
+<section class="stack-block">
+  <p class="breadcrumb">
+    <a href="{{ relative_root }}learning.html">Learning</a>
+    /
+    {{ classification.classification_name }}
+  </p>
+  <p class="page-kicker">CLASSIFICATION</p>
+  <p>{{ classification.track_count }} tracks / {{ classification.lesson_count }} lessons</p>
+</section>
+
+<section class="stack-block">
+  <p class="page-kicker">TRACKS</p>
+  <div class="track-rail">
+    {% for track in tracks %}
+    <article class="track-row track-row-{{ track.public_progress_status }}">
+      <div class="track-row-main">
+        <p class="status-badge">
+          [{% if track.public_progress_status == 'done' %}DONE{% elif track.public_progress_status == 'current' or track.public_progress_status == 'in_progress' %}CONTINUE{% elif track.public_progress_status == 'locked' %}LOCKED{% else %}START{% endif %}]
         </p>
-        <p class="page-kicker">CLASSIFICATION</p>
-        <p>{{ classification.track_count }} tracks / {{ classification.lesson_count }} lessons</p>
-      </section>
-
-      <section class="stack-block">
-        <p class="page-kicker">TRACKS</p>
-        <div class="track-rail">
-          {% for track in tracks %}
-          <article class="track-row track-row-{{ track.public_progress_status }}">
-            <div class="track-row-main">
-              <p class="status-badge">
-                [{% if track.public_progress_status == 'done' %}DONE{% elif track.public_progress_status == 'current' or track.public_progress_status == 'in_progress' %}CONTINUE{% elif track.public_progress_status == 'locked' %}LOCKED{% else %}START{% endif %}]
-              </p>
-              <h2><a href="{{ relative_root }}tracks/{{ track.track_id }}.html">{{ track.name }}</a></h2>
-              {% if track.description %}
-              <p class="track-summary">{{ track.description }}</p>
-              {% endif %}
-            </div>
-            <div class="track-row-side">
-              <p class="track-row-meta">
-                {% if track.track_tier %}{{ track.track_tier|replace('-', ' ')|title }} / {% endif %}
-                {{ track.public_lesson_count }} lessons
-              </p>
-              <p class="track-row-progress">{{ track.completed_public_count }}/{{ track.public_lesson_count }} complete</p>
-              <p><a class="cta-link" href="{{ relative_root }}tracks/{{ track.track_id }}.html">Open track</a></p>
-            </div>
-          </article>
-          {% endfor %}
-        </div>
-      </section>
-    </main>
-
-    <hr />
-    <footer>
-      <p>
-        Generated on {{ generated_at }} | @{{ author }} | Built with
-        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
-      </p>
-    </footer>
-  </body>
-</html>
+        <h2><a href="{{ relative_root }}tracks/{{ track.track_id }}.html">{{ track.name }}</a></h2>
+        {% if track.description %}
+        <p class="track-summary">{{ track.description }}</p>
+        {% endif %}
+      </div>
+      <div class="track-row-side">
+        <p class="track-row-meta">
+          {% if track.track_tier %}{{ track.track_tier|replace('-', ' ')|title }} / {% endif %}
+          {{ track.public_lesson_count }} lessons
+        </p>
+        <p class="track-row-progress">{{ track.completed_public_count }}/{{ track.public_lesson_count }} complete</p>
+        <p><a class="cta-link" href="{{ relative_root }}tracks/{{ track.track_id }}.html">Open track</a></p>
+      </div>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

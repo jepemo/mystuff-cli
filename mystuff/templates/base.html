@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{% block page_title %}@{{ author }}{% endblock %}</title>
+    <link rel="shortcut icon" href="{{ relative_root|default('') }}favicon.ico" />
+    <link rel="stylesheet" href="{{ relative_root|default('') }}css/style.css" />
+    <script src="{{ relative_root|default('') }}js/site.js" defer></script>
+    {% block head_extra %}{% endblock %}
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="site-path" aria-label="Site navigation">
+        <a class="brand" href="{{ relative_root|default('') }}index.html">Home</a>
+        <span class="path-separator" aria-hidden="true">/</span>
+        <a href="{{ relative_root|default('') }}learning.html">Learning</a>
+        <span class="path-separator" aria-hidden="true">/</span>
+        <a href="{{ relative_root|default('') }}links.html">Links</a>
+        {% if menu_items %}
+        {% for item in menu_items %}
+        {% if not (item.name == "Home" and item.url == "/") %}
+        <span class="path-separator" aria-hidden="true">/</span>
+        <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>
+        {% endif %}
+        {% endfor %}
+        {% endif %}
+      </nav>
+      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" title="Switch theme">
+        <span class="theme-toggle-icon theme-toggle-moon" aria-hidden="true">☾</span>
+        <span class="theme-toggle-icon theme-toggle-sun" aria-hidden="true">☀</span>
+      </button>
+    </header>
+
+    <main class="{% block main_class %}{% endblock %}">
+      {% block content %}{% endblock %}
+    </main>
+
+    <footer class="site-footer">
+      <p>
+        Generated on {{ generated_at }} | @{{ author }} | Built with
+        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
+      </p>
+    </footer>
+
+    {% block scripts %}{% endblock %}
+  </body>
+</html>

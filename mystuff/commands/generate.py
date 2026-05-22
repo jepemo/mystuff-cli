@@ -622,14 +622,21 @@ def copy_static_files(output_dir: Path) -> None:
         )
         return
     
-    # Copy CSS files
+    # Copy the active brutalist stylesheet only. Legacy CSS snapshots are kept
+    # in the package for reference but should not be published as site assets.
     css_src = static_dir / "css"
     css_dest = output_dir / "css"
+
+    for legacy_css in ("normalize.css", "style_old.css"):
+        legacy_path = css_dest / legacy_css
+        if legacy_path.exists():
+            legacy_path.unlink()
+            console.print(f"  🧹 Removed legacy {legacy_css}")
     
-    if css_src.exists():
-        for css_file in css_src.glob("*.css"):
-            shutil.copy2(css_file, css_dest)
-            console.print(f"  📄 Copied {css_file.name}")
+    css_file = css_src / "style.css"
+    if css_file.exists():
+        shutil.copy2(css_file, css_dest)
+        console.print(f"  📄 Copied {css_file.name}")
     
     # Copy JS files if they exist
     js_src = static_dir / "js"

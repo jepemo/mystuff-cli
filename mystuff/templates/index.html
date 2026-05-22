@@ -1,82 +1,55 @@
-<!DOCTYPE html>
-<html lang="en" data-skin="clean" data-theme="system">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@{{ author }}</title>
-    <link rel="shortcut icon" href="favicon.ico" />
-    <link rel="stylesheet" href="css/style.css" />
-      <script src="{{ relative_root|default('') }}js/site.js" defer></script>
-  </head>
-  <body>
-    <h1>@{{ author }}</h1>
+{% extends "base.html" %}
 
-    <nav>
-      <a href="index.html">Home</a> |
-      <a href="learning.html">Learning</a> |
-      <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} |
-      <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
-    </nav>
+{% block page_title %}@{{ author }}{% endblock %}
 
-    <main>
-      <p>{{ description }}</p>
+{% block content %}
+<h1>@{{ author }}</h1>
+<p>{{ description }}</p>
 
-      {% if learning %}
-      <section class="stack-block">
-        <p class="page-kicker">CURRENT LEARNING</p>
-        <p class="breadcrumb">
-          <a href="{{ learning.classification_url }}">{{ learning.classification_name }}</a>
-          /
-          <a href="{{ learning.track_url }}">{{ learning.track_name }}</a>
-        </p>
-        <h2><a href="{{ learning.lesson_url }}">{{ learning.lesson_title }}</a></h2>
-        <p>
-          Continue from the current lesson and pick back up where you left off.
-        </p>
-        {% if learning.last_opened_at %}
-        <p>Last opened: {{ learning.last_opened_at }}</p>
-        {% endif %}
-      </section>
-      {% endif %}
+{% if learning %}
+<section class="stack-block">
+  <p class="page-kicker">CURRENT LEARNING</p>
+  <p class="breadcrumb">
+    <a href="{{ learning.classification_url }}">{{ learning.classification_name }}</a>
+    /
+    <a href="{{ learning.track_url }}">{{ learning.track_name }}</a>
+  </p>
+  <h2><a href="{{ learning.lesson_url }}">{{ learning.lesson_title }}</a></h2>
+  <p>Continue from the current lesson and pick back up where you left off.</p>
+  {% if learning.last_opened_at %}
+  <p>Last opened: {{ learning.last_opened_at }}</p>
+  {% endif %}
+</section>
+{% endif %}
 
-      {% if classifications %}
-      <section class="stack-block">
-        <p class="page-kicker">LEARNING HUB</p>
-        <h2><a href="learning.html">Browse {{ classifications|length }} classifications</a></h2>
-        <p>Move through the curriculum by classification, then drill into each track for the syllabus and lessons.</p>
-      </section>
-      {% endif %}
+{% if classifications %}
+<section class="stack-block">
+  <p class="page-kicker">LEARNING HUB</p>
+  <h2><a href="learning.html">Browse {{ classifications|length }} classifications</a></h2>
+  <p>Move through the curriculum by classification, then drill into each track for the syllabus and lessons.</p>
+</section>
+{% endif %}
 
-      {% if repositories %}
-      <section class="stack-block">
-        <p class="page-kicker">OSS</p>
-        <h2>Open Source</h2>
-        <ul class="plain-list">
-          {% for repo in repositories %}
-          <li>
-            <strong><a href="{{ repo.url }}" target="_blank">{{ repo.name }}</a></strong>
-            {% if repo.description %} - {{ repo.description }}{% endif %}
-            {% if repo.language %} [{{ repo.language }}]{% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-      </section>
-      {% else %}
-      <section class="stack-block">
-        <p class="page-kicker">WELCOME</p>
-        <h2>Static knowledge base</h2>
-        <p>This site is generated from your local mystuff data.</p>
-        <p>Use <code>mystuff generate web</code> after updating content.</p>
-      </section>
-      {% endif %}
-    </main>
-
-    <hr />
-    <footer>
-      <p>
-        Generated on {{ generated_at }} | @{{ author }} | Built with
-        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
-      </p>
-    </footer>
-  </body>
-</html>
+{% if repositories %}
+<section class="stack-block">
+  <p class="page-kicker">OSS</p>
+  <h2>Open Source</h2>
+  <ul class="plain-list">
+    {% for repo in repositories %}
+    <li>
+      <strong><a href="{{ repo.url }}" target="_blank">{{ repo.name }}</a></strong>
+      {% if repo.description %} - {{ repo.description }}{% endif %}
+      {% if repo.language %} [{{ repo.language }}]{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+</section>
+{% else %}
+<section class="stack-block">
+  <p class="page-kicker">WELCOME</p>
+  <h2>Static knowledge base</h2>
+  <p>This site is generated from your local mystuff data.</p>
+  <p>Use <code>mystuff generate web</code> after updating content.</p>
+</section>
+{% endif %}
+{% endblock %}

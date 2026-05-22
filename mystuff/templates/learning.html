@@ -1,71 +1,48 @@
-<!DOCTYPE html>
-<html lang="en" data-skin="clean" data-theme="system">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Learning - @{{ author }}</title>
-    <link rel="shortcut icon" href="favicon.ico" />
-    <link rel="stylesheet" href="css/style.css" />
-      <script src="{{ relative_root|default('') }}js/site.js" defer></script>
-  </head>
-  <body>
-    <h1>Learning</h1>
+{% extends "base.html" %}
 
-    <nav>
-      <a href="index.html">Home</a> |
-      <a href="learning.html">Learning</a> |
-      <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} |
-      <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
-    </nav>
+{% block page_title %}Learning - @{{ author }}{% endblock %}
+{% block main_class %}learning-hub{% endblock %}
 
-    <main class="learning-hub">
-      <section class="stack-block">
-        <p class="page-kicker">CURRICULUM</p>
-        <p>
-          Explore the curriculum by classification, then enter each track for the
-          full syllabus and lessons.
-        </p>
-      </section>
+{% block content %}
+<h1>Learning</h1>
 
-      {% if learning %}
-      <section class="stack-block learning-hero">
-        <p class="page-kicker">CONTINUE LEARNING</p>
-        <h2><a href="{{ learning.lesson_url }}">{{ learning.lesson_title }}</a></h2>
-        <p class="hero-context">
-          <a href="{{ learning.classification_url }}">{{ learning.classification_name }}</a>
-          / <a href="{{ learning.track_url }}">{{ learning.track_name }}</a>
-        </p>
-        <p><a class="cta-link" href="{{ learning.lesson_url }}">Open current lesson</a></p>
-      </section>
-      {% endif %}
+<section class="stack-block">
+  <p class="page-kicker">CURRICULUM</p>
+  <p>
+    Explore the curriculum by classification, then enter each track for the
+    full syllabus and lessons.
+  </p>
+</section>
 
-      {% if classifications %}
-      <section class="stack-block">
-        <p class="page-kicker">CLASSIFICATIONS</p>
-        <div class="classification-grid">
-          {% for classification in classifications %}
-          <article class="classification-card">
-            <p class="status-badge">[{{ classification.track_count }} TRACKS]</p>
-            <h2><a href="{{ classification.url }}">{{ classification.classification_name }}</a></h2>
-            <p>{{ classification.lesson_count }} lessons across this classification.</p>
-            <p><a class="cta-link" href="{{ classification.url }}">Browse tracks</a></p>
-          </article>
-          {% endfor %}
-        </div>
-      </section>
-      {% else %}
-      <section class="stack-block">
-        <p>No public classifications found.</p>
-      </section>
-      {% endif %}
-    </main>
+{% if learning %}
+<section class="stack-block learning-hero">
+  <p class="page-kicker">CONTINUE LEARNING</p>
+  <h2><a href="{{ learning.lesson_url }}">{{ learning.lesson_title }}</a></h2>
+  <p class="hero-context">
+    <a href="{{ learning.classification_url }}">{{ learning.classification_name }}</a>
+    / <a href="{{ learning.track_url }}">{{ learning.track_name }}</a>
+  </p>
+  <p><a class="cta-link" href="{{ learning.lesson_url }}">Open current lesson</a></p>
+</section>
+{% endif %}
 
-    <hr />
-    <footer>
-      <p>
-        Generated on {{ generated_at }} | @{{ author }} | Built with
-        <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a>
-      </p>
-    </footer>
-  </body>
-</html>
+{% if classifications %}
+<section class="stack-block">
+  <p class="page-kicker">CLASSIFICATIONS</p>
+  <div class="classification-grid">
+    {% for classification in classifications %}
+    <article class="classification-card">
+      <p class="status-badge">[{{ classification.track_count }} TRACKS]</p>
+      <h2><a href="{{ classification.url }}">{{ classification.classification_name }}</a></h2>
+      <p>{{ classification.lesson_count }} lessons across this classification.</p>
+      <p><a class="cta-link" href="{{ classification.url }}">Browse tracks</a></p>
+    </article>
+    {% endfor %}
+  </div>
+</section>
+{% else %}
+<section class="stack-block">
+  <p>No public classifications found.</p>
+</section>
+{% endif %}
+{% endblock %}

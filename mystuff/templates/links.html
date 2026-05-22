@@ -1,187 +1,168 @@
-<!DOCTYPE html>
-<html lang="en" data-skin="clean" data-theme="system">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@{{ author }}</title>
-    <link rel="shortcut icon" href="favicon.ico">
-    <link rel="stylesheet" href="css/style.css">
-    <script src="js/site.js" defer></script>
-  </head>
-<body>
-    <h1>Links</h1>
-    
-    <nav>
-        <a href="index.html">Home</a> | 
-        <a href="learning.html">Learning</a> | 
-        <a href="links.html">Links</a>{% if menu_items %}{% for item in menu_items %} | 
-        <a href="{{ item.url }}"{% if item.url.startswith('http') %} target="_blank"{% endif %}>{{ item.name }}</a>{% endfor %}{% endif %}
-    </nav>
-    
-    <main>
-        <p>Curated collection of useful resources organized by category.</p>
-        
-        <form action="#" method="get">
-            <label for="search">Search links:</label>
-            <input type="search" id="search" name="search" placeholder="Type to search...">
-            
-            <label for="tag-filter">Filter by tag:</label>
-            <select id="tag-filter" name="tag-filter">
-                <option value="">All Tags</option>
-            </select>
-        </form>
-        
-        <div id="results-count" style="display: none;"></div>
-        
-        <ul id="links-list"></ul>
-        
-        <div id="no-results" style="display: none;">
-            <p>No links found matching your search.</p>
-        </div>
-    </main>
-    
-    <script>
-    // Data embedded from mystuff
-    const LINKS_DATA = {{ links_json|safe }};
-    
-    // DOM elements
-    const searchInput = document.getElementById('search');
-    const tagFilter = document.getElementById('tag-filter');
-    const linksList = document.getElementById('links-list');
-    const resultsCount = document.getElementById('results-count');
-    const noResults = document.getElementById('no-results');
-    
-    // State
-    let allLinks = [];
-    let filteredLinks = [];
-    let allTags = [];
-    
-    // Initialize
-    document.addEventListener('DOMContentLoaded', function() {
-        initializeLinks();
-        populateTagFilter();
-        renderLinks();
-        
-        searchInput.addEventListener('input', function() {
-            performFilter();
-        });
-        
-        tagFilter.addEventListener('change', function() {
-            performFilter();
-        });
-    });
-    
-    function initializeLinks() {
-        allLinks = LINKS_DATA || [];
-        filteredLinks = allLinks.slice();
-        
-        // Extract all unique tags
-        const tagSet = new Set();
-        allLinks.forEach(link => {
-            if (link.tags && Array.isArray(link.tags)) {
-                link.tags.forEach(tag => tagSet.add(tag));
-            }
-        });
-        allTags = Array.from(tagSet).sort();
-    }
-    
-    function populateTagFilter() {
-        allTags.forEach(tag => {
-            const option = document.createElement('option');
-            option.value = tag;
-            option.textContent = tag;
-            tagFilter.appendChild(option);
-        });
-    }
-    
-    function performFilter() {
-        const searchTerm = searchInput.value.toLowerCase().trim();
-        const selectedTag = tagFilter.value;
-        
-        filteredLinks = allLinks.filter(link => {
-            // Search filter
-            const matchesSearch = !searchTerm || 
-                link.title.toLowerCase().includes(searchTerm) ||
-                link.url.toLowerCase().includes(searchTerm) ||
-                (link.description && link.description.toLowerCase().includes(searchTerm)) ||
-                (link.tags && link.tags.some(tag => tag.toLowerCase().includes(searchTerm)));
-            
-            // Tag filter
-            const matchesTag = !selectedTag || 
-                (link.tags && link.tags.includes(selectedTag));
-            
-            return matchesSearch && matchesTag;
-        });
-        
-        renderLinks();
-    }
-    
-    function renderLinks() {
-        linksList.innerHTML = '';
-        
-        if (filteredLinks.length === 0) {
-            noResults.style.display = 'block';
-            resultsCount.style.display = 'none';
-            return;
-        }
-        
-        noResults.style.display = 'none';
-        resultsCount.style.display = 'block';
-        resultsCount.textContent = `${filteredLinks.length} links found`;
-        
-        // Group by category
-        const categories = {};
-        filteredLinks.forEach(link => {
-            const category = link.category;
-            // Skip uncategorized or empty categories
-            if (!category || category.toLowerCase() === 'uncategorized') {
-                return;
-            }
-            if (!categories[category]) {
-                categories[category] = [];
-            }
-            categories[category].push(link);
-        });
-        
-        // If no categories, show links without category headers
-        const categoryKeys = Object.keys(categories);
-        if (categoryKeys.length === 0) {
-            // Show all links without categories
-            filteredLinks.forEach(link => {
-                if (!link.category || link.category.toLowerCase() === 'uncategorized') {
-                    const linkItem = document.createElement('li');
-                    linkItem.innerHTML = `
-                        <strong><a href="${link.url}" target="_blank">${link.title}</a></strong>
-                        ${link.description ? ` - ${link.description}` : ''}
-                        ${link.tags && link.tags.length > 0 ? ` [${link.tags.join(', ')}]` : ''}
-                    `;
-                    linksList.appendChild(linkItem);
-                }
-            });
-        } else {
-            // Render categories
-            categoryKeys.sort().forEach(category => {
-                const categoryHeader = document.createElement('li');
-                categoryHeader.innerHTML = `<h3>${category}</h3>`;
-                linksList.appendChild(categoryHeader);
-                
-                categories[category].forEach(link => {
-                    const linkItem = document.createElement('li');
-                    linkItem.innerHTML = `
-                        <strong><a href="${link.url}" target="_blank">${link.title}</a></strong>
-                        ${link.description ? ` - ${link.description}` : ''}
-                        ${link.tags && link.tags.length > 0 ? ` [${link.tags.join(', ')}]` : ''}
-                    `;
-                    linksList.appendChild(linkItem);
-                });
-            });
-        }
-    }
-    </script>
+{% extends "base.html" %}
 
-    <hr>
-    <footer>
-        <p>Generated on {{ generated_at }} | @{{ author }} | Built with <a href="https://github.com/jepemo/mystuff-cli" target="_blank">mystuff-cli</a></p>
-    </footer>
-</body>
-</html>
+{% block page_title %}Links - @{{ author }}{% endblock %}
+
+{% block content %}
+<h1>Links</h1>
+
+<p>Curated collection of useful resources organized by category.</p>
+
+<form action="#" method="get">
+  <label for="search">Search links:</label>
+  <input type="search" id="search" name="search" placeholder="Type to search..." />
+
+  <label for="tag-filter">Filter by tag:</label>
+  <select id="tag-filter" name="tag-filter">
+    <option value="">All Tags</option>
+  </select>
+</form>
+
+<div id="results-count" style="display: none;"></div>
+
+<ul id="links-list"></ul>
+
+<div id="no-results" style="display: none;">
+  <p>No links found matching your search.</p>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Data embedded from mystuff
+const LINKS_DATA = {{ links_json|safe }};
+
+// DOM elements
+const searchInput = document.getElementById('search');
+const tagFilter = document.getElementById('tag-filter');
+const linksList = document.getElementById('links-list');
+const resultsCount = document.getElementById('results-count');
+const noResults = document.getElementById('no-results');
+
+// State
+let allLinks = [];
+let filteredLinks = [];
+let allTags = [];
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  initializeLinks();
+  populateTagFilter();
+  renderLinks();
+
+  searchInput.addEventListener('input', function() {
+    performFilter();
+  });
+
+  tagFilter.addEventListener('change', function() {
+    performFilter();
+  });
+});
+
+function initializeLinks() {
+  allLinks = LINKS_DATA || [];
+  filteredLinks = allLinks.slice();
+
+  // Extract all unique tags
+  const tagSet = new Set();
+  allLinks.forEach(link => {
+    if (link.tags && Array.isArray(link.tags)) {
+      link.tags.forEach(tag => tagSet.add(tag));
+    }
+  });
+  allTags = Array.from(tagSet).sort();
+}
+
+function populateTagFilter() {
+  allTags.forEach(tag => {
+    const option = document.createElement('option');
+    option.value = tag;
+    option.textContent = tag;
+    tagFilter.appendChild(option);
+  });
+}
+
+function performFilter() {
+  const searchTerm = searchInput.value.toLowerCase().trim();
+  const selectedTag = tagFilter.value;
+
+  filteredLinks = allLinks.filter(link => {
+    // Search filter
+    const matchesSearch = !searchTerm ||
+      link.title.toLowerCase().includes(searchTerm) ||
+      link.url.toLowerCase().includes(searchTerm) ||
+      (link.description && link.description.toLowerCase().includes(searchTerm)) ||
+      (link.tags && link.tags.some(tag => tag.toLowerCase().includes(searchTerm)));
+
+    // Tag filter
+    const matchesTag = !selectedTag ||
+      (link.tags && link.tags.includes(selectedTag));
+
+    return matchesSearch && matchesTag;
+  });
+
+  renderLinks();
+}
+
+function renderLinks() {
+  linksList.innerHTML = '';
+
+  if (filteredLinks.length === 0) {
+    noResults.style.display = 'block';
+    resultsCount.style.display = 'none';
+    return;
+  }
+
+  noResults.style.display = 'none';
+  resultsCount.style.display = 'block';
+  resultsCount.textContent = `${filteredLinks.length} links found`;
+
+  // Group by category
+  const categories = {};
+  filteredLinks.forEach(link => {
+    const category = link.category;
+    // Skip uncategorized or empty categories
+    if (!category || category.toLowerCase() === 'uncategorized') {
+      return;
+    }
+    if (!categories[category]) {
+      categories[category] = [];
+    }
+    categories[category].push(link);
+  });
+
+  // If no categories, show links without category headers
+  const categoryKeys = Object.keys(categories);
+  if (categoryKeys.length === 0) {
+    // Show all links without categories
+    filteredLinks.forEach(link => {
+      if (!link.category || link.category.toLowerCase() === 'uncategorized') {
+        const linkItem = document.createElement('li');
+        linkItem.innerHTML = `
+          <strong><a href="${link.url}" target="_blank">${link.title}</a></strong>
+          ${link.description ? ` - ${link.description}` : ''}
+          ${link.tags && link.tags.length > 0 ? ` [${link.tags.join(', ')}]` : ''}
+        `;
+        linksList.appendChild(linkItem);
+      }
+    });
+  } else {
+    // Render categories
+    categoryKeys.sort().forEach(category => {
+      const categoryHeader = document.createElement('li');
+      categoryHeader.innerHTML = `<h3>${category}</h3>`;
+      linksList.appendChild(categoryHeader);
+
+      categories[category].forEach(link => {
+        const linkItem = document.createElement('li');
+        linkItem.innerHTML = `
+          <strong><a href="${link.url}" target="_blank">${link.title}</a></strong>
+          ${link.description ? ` - ${link.description}` : ''}
+          ${link.tags && link.tags.length > 0 ? ` [${link.tags.join(', ')}]` : ''}
+        `;
+        linksList.appendChild(linkItem);
+      });
+    });
+  }
+}
+</script>
+{% endblock %}
