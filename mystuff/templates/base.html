@@ -11,6 +11,13 @@
   </head>
   <body>
     <header class="site-header">
+      <div class="site-topline">
+        <a class="site-title" href="{{ relative_root|default('') }}index.html">@{{ author }}</a>
+        <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" title="Switch theme">
+          <span class="theme-toggle-icon theme-toggle-moon" aria-hidden="true">☾</span>
+          <span class="theme-toggle-icon theme-toggle-sun" aria-hidden="true">☀</span>
+        </button>
+      </div>
       <nav class="site-path" aria-label="Site navigation">
         <a class="brand" href="{{ relative_root|default('') }}index.html">Home</a>
         <span class="path-separator" aria-hidden="true">/</span>
@@ -26,10 +33,6 @@
         {% endfor %}
         {% endif %}
       </nav>
-      <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch to dark mode" title="Switch theme">
-        <span class="theme-toggle-icon theme-toggle-moon" aria-hidden="true">☾</span>
-        <span class="theme-toggle-icon theme-toggle-sun" aria-hidden="true">☀</span>
-      </button>
     </header>
 
     <main class="{% block main_class %}{% endblock %}">
