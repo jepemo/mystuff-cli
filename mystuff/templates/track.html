@@ -33,7 +33,6 @@
         {% if lesson.lesson_kind != 'lesson' %}
         <span class="inline-badge">{{ lesson.lesson_kind|replace('_', ' ')|upper }}</span>
         {% endif %}
-        <p class="lesson-syllabus-meta">{{ lesson.estimated_time or '-' }} min</p>
       </div>
       <div class="lesson-syllabus-status">[{{ lesson.status|upper }}]</div>
     </li>

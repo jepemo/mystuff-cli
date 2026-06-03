@@ -347,6 +347,99 @@ def test_group_tracks_by_classification_preserves_order(sample_learning, sample_
     assert [track["track_id"] for track in classifications[1]["tracks"]] == ["systems"]
 
 
+def test_learning_template_includes_switchable_tracks_view(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    tracks = load_all_tracks_with_status()
+    classifications = group_tracks_by_classification(tracks)
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "learning.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "learning": None,
+            "tracks": tracks,
+            "classifications": classifications,
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "learning.html",
+    )
+
+    html_content = (temp_output_dir / "learning.html").read_text(encoding="utf-8")
+
+    assert 'data-learning-view-button="tracks"' in html_content
+    assert 'data-learning-view="tracks"' in html_content
+    assert "compact-track-group" not in html_content
+    assert "compact-track-row" in html_content
+    assert "Foundations" in html_content
+    assert "Systems Thinking" in html_content
+    assert "Core concepts." in html_content
+    assert (
+        'href="classifications/complexity-and-dynamics.html">Complexity And Dynamics'
+        in html_content
+    )
+    assert (
+        html_content.index('href="tracks/systems.html">Systems')
+        < html_content.index('href="tracks/foundations.html">Foundations')
+    )
+    assert "Explore the curriculum by classification" not in html_content
+
+
+def test_track_template_omits_lesson_minutes(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    track = load_all_tracks_with_status()[0]
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "track.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "track": track,
+            "classification": {
+                "classification_id": track["classification"],
+                "classification_name": track["classification_name"],
+                "url": f"../classifications/{track['classification']}.html",
+            },
+            "lessons": track["lessons"],
+            "relative_root": "../",
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "track.html",
+    )
+
+    html_content = (temp_output_dir / "track.html").read_text(encoding="utf-8")
+
+    assert "Intro to Foundations" in html_content
+    assert "lesson-syllabus-meta" not in html_content
+    assert "20 min" not in html_content
+
+
 def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
     sample_learning, sample_config, temp_output_dir, tmp_path, monkeypatch
 ):

@@ -6,13 +6,26 @@
 {% block content %}
 <h1>Learning</h1>
 
-<section class="stack-block">
-  <p class="page-kicker">CURRICULUM</p>
-  <p>
-    Explore the curriculum by classification, then enter each track for the
-    full syllabus and lessons.
-  </p>
-</section>
+<div class="learning-view-shell" data-learning-view-root>
+  <div class="learning-header">
+    <div>
+      <p class="page-kicker">CURRICULUM</p>
+      <p class="learning-counts">
+        {{ classifications|length }} classification{% if classifications|length != 1 %}s{% endif %}
+        / {{ tracks|length }} track{% if tracks|length != 1 %}s{% endif %}
+      </p>
+    </div>
+    {% if classifications %}
+    <div class="segmented-control" role="group" aria-label="Learning view">
+      <button type="button" data-learning-view-button="classifications" aria-pressed="true">
+        Classifications
+      </button>
+      <button type="button" data-learning-view-button="tracks" aria-pressed="false">
+        Tracks
+      </button>
+    </div>
+    {% endif %}
+  </div>
 
 {% if learning %}
 <section class="stack-block learning-hero">
@@ -27,7 +40,7 @@
 {% endif %}
 
 {% if classifications %}
-<section class="stack-block">
+<section class="stack-block learning-view" data-learning-view="classifications">
   <p class="page-kicker">CLASSIFICATIONS</p>
   <div class="classification-grid">
     {% for classification in classifications %}
@@ -40,9 +53,28 @@
     {% endfor %}
   </div>
 </section>
+<section class="stack-block learning-view" data-learning-view="tracks" hidden>
+  <p class="page-kicker">TRACKS</p>
+  <div class="compact-track-list">
+    {% for classification in classifications|sort(attribute='classification_name') %}
+    {% for track in classification.tracks %}
+    <article class="compact-track-row">
+      <h2><a href="{{ track.url }}">{{ track.name }}</a></h2>
+      <p class="compact-track-classification">
+        <a href="{{ classification.url }}">{{ classification.classification_name }}</a>
+      </p>
+      <p class="compact-track-description">
+        {% if track.description %}{{ track.description }}{% else %}-{% endif %}
+      </p>
+    </article>
+    {% endfor %}
+    {% endfor %}
+  </div>
+</section>
 {% else %}
 <section class="stack-block">
   <p>No public classifications found.</p>
 </section>
 {% endif %}
+</div>
 {% endblock %}
