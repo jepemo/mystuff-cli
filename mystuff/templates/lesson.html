@@ -2,11 +2,16 @@
 
 {% block page_title %}{{ lesson_title }} - @{{ author }}{% endblock %}
 {% block main_class %}lesson-page{% endblock %}
+{% block header_actions %}
+<button class="read-mode-toggle" type="button" data-read-mode-toggle aria-label="Enter read mode" aria-pressed="false">
+  READ
+</button>
+{% endblock %}
 
 {% block content %}
 <h1>{{ lesson_title }}</h1>
 
-<section class="stack-block">
+<section class="stack-block lesson-context">
   <p class="breadcrumb">
     <a href="{{ relative_root }}learning.html">Learning</a>
     /
@@ -32,7 +37,7 @@
   {{ lesson_content|safe }}
 </section>
 
-<section class="lesson-navigation-grid">
+<section class="lesson-navigation-grid lesson-page-nav">
   {% if prev_lesson %}
   <a class="nav-card" href="{{ prev_lesson.url }}">
     <span class="page-kicker">PREVIOUS</span>
@@ -58,8 +63,9 @@
   {% endif %}
 </section>
 
-<section class="stack-block">
+<section class="stack-block lesson-link-strip">
   <p><a href="{{ track_page_url }}">← Back to {{ track.name }}</a></p>
+  <p><a href="{{ classification_page_url }}">← Back to {{ classification.classification_name }}</a></p>
   <p><a href="{{ relative_root }}learning.html">← Back to Learning Hub</a></p>
 </section>
 {% endblock %}

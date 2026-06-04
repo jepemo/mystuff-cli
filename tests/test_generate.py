@@ -380,6 +380,7 @@ def test_learning_template_includes_switchable_tracks_view(
 
     html_content = (temp_output_dir / "learning.html").read_text(encoding="utf-8")
 
+    assert "data-theme-toggle" in html_content
     assert 'data-learning-view-button="tracks"' in html_content
     assert 'data-learning-view="tracks"' in html_content
     assert "compact-track-group" not in html_content
@@ -391,10 +392,9 @@ def test_learning_template_includes_switchable_tracks_view(
         'href="classifications/complexity-and-dynamics.html">Complexity And Dynamics'
         in html_content
     )
-    assert (
-        html_content.index('href="tracks/systems.html">Systems')
-        < html_content.index('href="tracks/foundations.html">Foundations')
-    )
+    assert html_content.index(
+        'href="tracks/systems.html">Systems'
+    ) < html_content.index('href="tracks/foundations.html">Foundations')
     assert "Explore the curriculum by classification" not in html_content
 
 
@@ -438,6 +438,58 @@ def test_track_template_omits_lesson_minutes(
     assert "Intro to Foundations" in html_content
     assert "lesson-syllabus-meta" not in html_content
     assert "20 min" not in html_content
+
+
+def test_lesson_template_includes_read_mode_controls(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    track = load_all_tracks_with_status()[0]
+    lesson = track["lessons"][0]
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "lesson.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "lesson": lesson,
+            "track": track,
+            "classification": {
+                "classification_id": track["classification"],
+                "classification_name": track["classification_name"],
+            },
+            "lesson_title": lesson["title"],
+            "lesson_content": "<p>Lesson body.</p>",
+            "prev_lesson": None,
+            "next_lesson": {"url": "002.html", "title": "Next Lesson"},
+            "track_page_url": "../tracks/foundations.html",
+            "classification_page_url": "../classifications/systems-thinking.html",
+            "relative_root": "../",
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "lesson.html",
+    )
+
+    html_content = (temp_output_dir / "lesson.html").read_text(encoding="utf-8")
+
+    assert "data-read-mode-toggle" in html_content
+    assert "data-theme-toggle" in html_content
+    assert 'class="stack-block lesson-content-shell"' in html_content
+    assert 'class="lesson-navigation-grid lesson-page-nav"' in html_content
+    assert "Back to Foundations" in html_content
+    assert "Back to Systems Thinking" in html_content
+    assert "Back to Learning Hub" in html_content
 
 
 def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
