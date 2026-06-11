@@ -89,8 +89,15 @@ stores real lessons as `001.md`, `002.md`, and so on. Tracks are grouped by
 lesson`.
 
 ```bash
+# Show current learning state
+mystuff learn
+
 # List visible tracks grouped by classification
 mystuff learn list
+
+# Select or inspect an active track
+mystuff learn track
+mystuff learn track foundations
 
 # Inspect lessons inside a track
 mystuff learn list --track foundations
@@ -98,13 +105,17 @@ mystuff learn list --track foundations
 # Filter the catalog to one classification
 mystuff learn list --classification systems-thinking
 
-# Start or resume a track
+# Start a new track from a selector, or resume a specific track
+mystuff learn start
 mystuff learn start foundations
 
-# Open current lesson in web browser (opens configured web URL)
+# Select and open an active lesson
+mystuff learn current
+
+# Open a specific active lesson in web browser (opens configured web URL)
 mystuff learn current --web
 
-# Complete current lesson and advance within the same track
+# Select an active lesson and advance within its track
 mystuff learn next
 
 # View your progress
@@ -113,6 +124,10 @@ mystuff learn stats
 
 Important behavior:
 
+- `mystuff learn` shows a compact status summary with open tracks and the current lesson.
+- `mystuff learn track` opens an interactive selector for active tracks when no track id is passed.
+- `mystuff learn start` opens an interactive selector for tracks you have not started yet.
+- `mystuff learn current` and `mystuff learn next` select from active lessons when no reference is passed.
 - `mystuff learn start <track_id>` resumes the first pending lesson in that track.
 - `mystuff learn next` never jumps across tracks; when a track ends it suggests newly unlocked tracks.
 - Progress is stored in `learning/metadata.yaml` with `schema_version: 2`, `current_lesson_id`, and `completed_lessons` keyed by `lesson_id`.

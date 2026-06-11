@@ -8,6 +8,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+import mystuff.commands.learn as learn_command
 from mystuff.cli import app
 from mystuff.commands.learn import (
     convert_markdown_to_html,
@@ -238,6 +239,17 @@ def test_get_next_lesson_wraps_within_track(temp_learning_dir):
     assert next_lesson_id == "100"
 
 
+def test_learn_without_subcommand_shows_summary(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn"])
+
+    assert result.exit_code == 0
+    assert "Learning Summary" in result.output
+    assert "Tracks available" in result.output
+    assert "Current lesson" in result.output
+
+
 def test_start_track_sets_first_pending_lesson(temp_learning_dir):
     runner = CliRunner()
 
@@ -246,6 +258,54 @@ def test_start_track_sets_first_pending_lesson(temp_learning_dir):
     assert result.exit_code == 0
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
+
+
+def test_start_without_argument_selects_unstarted_track(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "start"], input="1\nn\n")
+
+    assert result.exit_code == 0
+    assert "Start track" in result.output
+    metadata = load_metadata()
+    assert metadata["current_lesson_id"] == "100"
+
+
+def test_track_without_argument_selects_active_track(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "track"], input="1\n")
+
+    assert result.exit_code == 0
+    assert "Select track" in result.output
+    assert "Intro to Foundations" in result.output
+
+
+def test_current_without_argument_selects_active_lesson(temp_learning_dir, monkeypatch):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "100",
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+    opened = []
+
+    def fake_open_lesson(lesson, web=False):
+        opened.append((lesson["lesson_id"], web))
+
+    monkeypatch.setattr(learn_command, "_open_lesson_path", fake_open_lesson)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "current"], input="1\n")
+
+    assert result.exit_code == 0
+    assert "Select active lesson" in result.output
+    assert opened == [("100", False)]
+    metadata = load_metadata()
+    assert metadata["current_lesson_id"] == "100"
+    assert metadata["last_opened_at"]
 
 
 def test_next_finishes_track_and_suggests_unlocked_tracks(temp_learning_dir):
@@ -260,7 +320,7 @@ def test_next_finishes_track_and_suggests_unlocked_tracks(temp_learning_dir):
     save_metadata(metadata)
 
     runner = CliRunner()
-    result = runner.invoke(app, ["learn", "next"])
+    result = runner.invoke(app, ["learn", "next"], input="1\n")
 
     assert result.exit_code == 0
     reloaded = load_metadata()
@@ -316,7 +376,9 @@ def test_catalog_rejects_mismatched_lesson_classification(temp_learning_dir):
     lesson_path = temp_learning_dir / "lessons" / "foundations" / "001.md"
     content = lesson_path.read_text(encoding="utf-8")
     lesson_path.write_text(
-        content.replace("classification: systems-thinking", "classification: wrong-group"),
+        content.replace(
+            "classification: systems-thinking", "classification: wrong-group"
+        ),
         encoding="utf-8",
     )
 
@@ -390,7 +452,6 @@ def test_convert_markdown_to_html(temp_learning_dir):
     assert "<!DOCTYPE html>" in html_content
     assert "<code>" in html_content
     Path(html_path).unlink()
-
 
 
 def test_unpublish_lesson_updates_public_frontmatter(temp_learning_dir):

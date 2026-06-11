@@ -491,6 +491,14 @@ def test_lesson_template_includes_read_mode_controls(
     assert "Back to Systems Thinking" in html_content
     assert "Back to Learning Hub" in html_content
 
+    css_content = (
+        Path(__file__).resolve().parents[1] / "mystuff/static/css/style.css"
+    ).read_text(encoding="utf-8")
+    read_mode_duplicate_title_selector = (
+        'html[data-read-mode="on"] .lesson-content-shell > h1:first-child'
+    )
+    assert read_mode_duplicate_title_selector in css_content
+
 
 def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
     sample_learning, sample_config, temp_output_dir, tmp_path, monkeypatch

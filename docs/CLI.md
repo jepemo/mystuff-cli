@@ -559,6 +559,25 @@ the frontmatter of each `001.md`, `002.md`, and so on. The catalog groups
 content by `classification`, so the default navigation is
 `classification -> track -> lesson`.
 
+#### `mystuff learn`
+
+Show a compact summary of the current learning state: visible tracks, open
+tracks, available tracks, locked tracks, completed lessons, and the current
+lesson.
+
+```bash
+mystuff learn
+```
+
+#### `mystuff learn track`
+
+Inspect one track. Without a track id, it opens an interactive selector for
+active, unlocked, unfinished tracks.
+
+```bash
+mystuff learn track [TRACK_ID]
+```
+
 #### `mystuff learn list`
 
 List visible classifications and tracks, or lessons inside a specific track.
@@ -580,7 +599,8 @@ mystuff learn list [OPTIONS]
 
 #### `mystuff learn start`
 
-Start or resume a track, lesson path, or lesson id.
+Start or resume a track, lesson path, or lesson id. Without a reference, it
+opens an interactive selector for tracks you have not started yet.
 
 ```bash
 mystuff learn start [OPTIONS] [LESSON]
@@ -599,18 +619,20 @@ first pending lesson.
 
 #### `mystuff learn current`
 
-Open the current lesson in your editor or published website.
+Open an active lesson in your editor or published website. Without a reference,
+it opens an interactive selector for active lessons.
 
 ```bash
-mystuff learn current [--web]
+mystuff learn current [REFERENCE] [--web]
 ```
 
 #### `mystuff learn next`
 
-Complete the current lesson and move to the next pending lesson in the same track.
+Complete an active lesson and move to the next pending lesson in the same track.
+Without a reference, it opens an interactive selector for active lessons.
 
 ```bash
-mystuff learn next [--web]
+mystuff learn next [REFERENCE] [--web]
 ```
 
 #### `mystuff learn stats`
