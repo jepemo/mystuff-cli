@@ -5,12 +5,11 @@ MyStuff CLI - Learning management functionality
 import datetime
 import os
 import re
-import subprocess
-import sys
 import tempfile
+import warnings
 import webbrowser
 from pathlib import Path
-from typing import Annotated, Any, Callable, Dict, List, Optional
+from typing import Annotated, Any, Dict, List, Optional
 
 import markdown
 import typer
@@ -19,14 +18,16 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
+from mystuff.interactive_selector import select_from_options
 from mystuff.learning_catalog import (
-    METADATA_TEMPLATE_V2,
     LearningCatalogError,
     LearningReferenceError,
     attach_progress,
+    fresh_metadata_template,
     get_all_lessons as catalog_get_all_lessons,
     get_completed_lesson_ids,
     get_current_lesson,
+    get_current_lesson_ids_by_track,
     get_learning_dir,
     get_lessons_dir,
     get_metadata_path,
@@ -42,7 +43,6 @@ from mystuff.learning_catalog import (
 )
 
 learn_app = typer.Typer(help="Manage learning tracks and progress")
-METADATA_TEMPLATE = dict(METADATA_TEMPLATE_V2)
 
 
 def load_config() -> Dict[str, Any]:
@@ -695,8 +695,12 @@ def get_next_lesson(current_lesson_id: str, metadata: Dict[str, Any]) -> Optiona
     return next_lesson["lesson_id"] if next_lesson else None
 
 
-def _load_catalog_or_exit() -> Dict[str, Any]:
+def _load_catalog_or_exit(*, quiet_warnings: bool = False) -> Dict[str, Any]:
     try:
+        if quiet_warnings:
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore", UserWarning)
+                return load_learning_catalog()
         return load_learning_catalog()
     except LearningCatalogError as exc:
         typer.echo(f"❌ {exc}", err=True)
@@ -747,6 +751,15 @@ def _lesson_icon(lesson: Dict[str, Any]) -> str:
     if status == "current":
         return "🔍"
     return "⏳"
+
+
+def _lesson_status_label(lesson: Dict[str, Any]) -> str:
+    status = lesson.get("progress_status")
+    if status == "done":
+        return "done"
+    if status == "current":
+        return "current"
+    return "todo"
 
 
 def _classification_display_name(classification: Dict[str, Any]) -> str:
@@ -813,6 +826,35 @@ def _visible_lessons(
     if include_private:
         return list(lessons)
     return [lesson for lesson in lessons if lesson["public"]]
+
+
+def _is_startable_track(track: Dict[str, Any]) -> bool:
+    return (
+        track.get("status") == "active"
+        and bool(track.get("public", True))
+        and bool(track.get("is_unlocked"))
+    )
+
+
+def _ensure_track_is_startable(
+    track: Dict[str, Any], catalog: Dict[str, Any]
+) -> None:
+    if track.get("status") != "active":
+        raise LearningReferenceError(f"Track '{track['track_id']}' is not active.")
+    if not track.get("public", True):
+        raise LearningReferenceError(f"Track '{track['track_id']}' is not published.")
+    if not track["is_unlocked"]:
+        raise LearningReferenceError(_track_lock_message(track, catalog))
+
+
+def _ensure_lesson_is_startable(
+    lesson: Dict[str, Any], track: Dict[str, Any], catalog: Dict[str, Any]
+) -> None:
+    _ensure_track_is_startable(track, catalog)
+    if not lesson.get("public", True):
+        raise LearningReferenceError(
+            f"Lesson '{lesson['track_id']}/{lesson['sequence_label']}' is not published."
+        )
 
 
 def _visible_classifications(
@@ -927,27 +969,27 @@ def _default_start_lesson(
 ) -> Optional[Dict[str, Any]]:
     current = get_current_lesson(metadata, catalog)
     completed_ids = get_completed_lesson_ids(metadata)
-    if current and current["lesson_id"] not in completed_ids:
+    current_track = (
+        catalog["tracks_by_id"].get(current["track_id"]) if current else None
+    )
+    if (
+        current
+        and current_track
+        and current["lesson_id"] not in completed_ids
+        and _is_startable_track(current_track)
+        and current.get("public", True)
+    ):
         return current
 
-    candidate_groups = [
-        [
-            track
-            for track in catalog["tracks"]
-            if track["status"] == "active" and track["is_unlocked"]
-        ],
-        [track for track in catalog["tracks"] if track["is_unlocked"]],
-        [track for track in catalog["tracks"] if track["status"] == "active"],
-        list(catalog["tracks"]),
-    ]
-
-    for group in candidate_groups:
-        for track in group:
-            for lesson in track["lessons"]:
-                if lesson["lesson_id"] not in completed_ids:
-                    return lesson
-            if track["lessons"]:
-                return track["lessons"][0]
+    for track in catalog["tracks"]:
+        if not _is_startable_track(track):
+            continue
+        visible_lessons = _visible_lessons(track)
+        for lesson in visible_lessons:
+            if lesson["lesson_id"] not in completed_ids:
+                return lesson
+        if visible_lessons:
+            return visible_lessons[0]
 
     return None
 
@@ -970,29 +1012,31 @@ def _resolve_start_target(
     if reference in catalog["lessons_by_id"] or "/" in reference:
         lesson = resolve_lesson_reference(reference, catalog)
         track = catalog["tracks_by_id"][lesson["track_id"]]
-        if not track["is_unlocked"]:
-            raise LearningReferenceError(_track_lock_message(track, catalog))
+        _ensure_lesson_is_startable(lesson, track, catalog)
         return lesson
 
     track = resolve_track_reference(reference, catalog)
-    if not track["is_unlocked"]:
-        raise LearningReferenceError(_track_lock_message(track, catalog))
-    if not track["lessons"]:
+    _ensure_track_is_startable(track, catalog)
+    visible_lessons = _visible_lessons(track)
+    if not visible_lessons:
         raise LearningReferenceError(
-            f"Track '{track['track_id']}' does not contain any lessons yet."
+            f"Track '{track['track_id']}' does not contain any published lessons yet."
         )
 
-    current = get_current_lesson(metadata, catalog)
     completed_ids = get_completed_lesson_ids(metadata)
-    if current and current["track_id"] == track["track_id"]:
-        if current["lesson_id"] not in completed_ids:
-            return current
+    current = _active_lesson_for_track(track, metadata, catalog)
+    if (
+        current
+        and current["lesson_id"] not in completed_ids
+        and current.get("public", True)
+    ):
+        return current
 
-    for lesson in track["lessons"]:
+    for lesson in visible_lessons:
         if lesson["lesson_id"] not in completed_ids:
             return lesson
 
-    return track["lessons"][0]
+    return visible_lessons[0]
 
 
 def _suggest_unlocked_tracks(
@@ -1003,8 +1047,7 @@ def _suggest_unlocked_tracks(
     return [
         track
         for track in catalog["tracks"]
-        if track["status"] == "active"
-        and track["is_unlocked"]
+        if _is_startable_track(track)
         and track["track_id"] != exclude_track_id
         and not is_track_completed(track, completed_ids)
     ]
@@ -1017,101 +1060,6 @@ def _print_track_suggestions(tracks: List[Dict[str, Any]]) -> None:
     typer.echo("🧭 Unlocked tracks you can start next:")
     for track in tracks:
         typer.echo(f"  - {track['track_id']}: {track['name']}")
-
-
-def _is_fzf_available() -> bool:
-    try:
-        subprocess.run(
-            ["fzf", "--version"],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=True,
-        )
-        return True
-    except (FileNotFoundError, subprocess.CalledProcessError):
-        return False
-
-
-def _can_use_fzf(prefer_fzf: bool = True) -> bool:
-    return (
-        prefer_fzf
-        and sys.stdin.isatty()
-        and sys.stderr.isatty()
-        and _is_fzf_available()
-    )
-
-
-def _select_with_fzf(labels: List[str], prompt: str) -> Optional[str]:
-    try:
-        result = subprocess.run(
-            [
-                "fzf",
-                "--height=40%",
-                "--layout=reverse",
-                f"--prompt={prompt}",
-            ],
-            input="\n".join(labels) + "\n",
-            stdout=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
-    except FileNotFoundError:
-        return None
-
-    if result.returncode != 0:
-        return None
-
-    selected = result.stdout.strip()
-    return selected or None
-
-
-def _select_with_numbered_prompt(
-    labels: List[str], label_to_item: Dict[str, Dict[str, Any]], prompt: str
-) -> Optional[Dict[str, Any]]:
-    typer.echo(prompt.rstrip(": "))
-    for index, label in enumerate(labels, start=1):
-        typer.echo(f"{index}. {label}")
-
-    while True:
-        raw_choice = typer.prompt("Choose a number", default="1")
-        try:
-            choice = int(str(raw_choice).strip())
-        except ValueError:
-            typer.echo("❌ Invalid selection.")
-            continue
-
-        if 1 <= choice <= len(labels):
-            return label_to_item[labels[choice - 1]]
-
-        typer.echo("❌ Invalid selection.")
-
-
-def _select_from_options(
-    items: List[Dict[str, Any]],
-    label_factory: Callable[[Dict[str, Any]], str],
-    prompt: str,
-    *,
-    prefer_fzf: bool = True,
-) -> Optional[Dict[str, Any]]:
-    if not items:
-        return None
-
-    labels: List[str] = []
-    label_to_item: Dict[str, Dict[str, Any]] = {}
-    for index, item in enumerate(items, start=1):
-        label = label_factory(item)
-        if label in label_to_item:
-            label = f"{label} #{index}"
-        labels.append(label)
-        label_to_item[label] = item
-
-    if _can_use_fzf(prefer_fzf=prefer_fzf):
-        selected_label = _select_with_fzf(labels, prompt)
-        if selected_label:
-            return label_to_item.get(selected_label)
-        return None
-
-    return _select_with_numbered_prompt(labels, label_to_item, prompt)
 
 
 def _track_selection_label(track: Dict[str, Any]) -> str:
@@ -1129,24 +1077,25 @@ def _lesson_selection_label(lesson: Dict[str, Any]) -> str:
     )
 
 
-def _open_track_candidates(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
+def _published_track_candidates(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         track
         for track in catalog["tracks"]
-        if track["status"] == "active"
-        and track["is_unlocked"]
-        and track["progress_status"] != "done"
+        if track.get("is_publicly_visible")
     ]
+
+
+def _plain_track_label(track: Dict[str, Any]) -> str:
+    return f"{track['track_id']} - {track['name']}"
 
 
 def _unstarted_track_candidates(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         track
         for track in catalog["tracks"]
-        if track["status"] == "active"
-        and track["is_unlocked"]
+        if _is_startable_track(track)
         and track["progress_status"] == "not_started"
-        and track["lessons"]
+        and _visible_lessons(track)
     ]
 
 
@@ -1159,11 +1108,64 @@ def _first_pending_lesson(
     return None
 
 
+def _active_lesson_for_track(
+    track: Dict[str, Any], metadata: Dict[str, Any], catalog: Dict[str, Any]
+) -> Optional[Dict[str, Any]]:
+    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    track_lesson_id = current_lesson_ids_by_track.get(track["track_id"])
+    if track_lesson_id:
+        lesson = catalog["lessons_by_id"].get(track_lesson_id)
+        if lesson and lesson["track_id"] == track["track_id"]:
+            return lesson
+
+    current = get_current_lesson(metadata, catalog)
+    if current and current["track_id"] == track["track_id"]:
+        return current
+
+    return None
+
+
+def _set_active_lesson(metadata: Dict[str, Any], lesson: Dict[str, Any]) -> None:
+    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    current_lesson_ids_by_track[lesson["track_id"]] = lesson["lesson_id"]
+    metadata["current_lesson_ids_by_track"] = current_lesson_ids_by_track
+    metadata["current_lesson_id"] = lesson["lesson_id"]
+
+
+def _ensure_global_current_lesson_is_tracked(
+    metadata: Dict[str, Any], catalog: Dict[str, Any]
+) -> None:
+    current = get_current_lesson(metadata, catalog)
+    if not current or current["lesson_id"] in get_completed_lesson_ids(metadata):
+        return
+
+    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    current_lesson_ids_by_track.setdefault(current["track_id"], current["lesson_id"])
+    metadata["current_lesson_ids_by_track"] = current_lesson_ids_by_track
+
+
+def _clear_active_track(
+    metadata: Dict[str, Any],
+    track_id: str,
+    *,
+    completed_lesson_id: Optional[str] = None,
+) -> None:
+    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    removed_lesson_id = current_lesson_ids_by_track.pop(track_id, None)
+    metadata["current_lesson_ids_by_track"] = current_lesson_ids_by_track
+
+    if metadata.get("current_lesson_id") in {removed_lesson_id, completed_lesson_id}:
+        metadata["current_lesson_id"] = next(
+            iter(current_lesson_ids_by_track.values()),
+            None,
+        )
+
+
 def _current_or_pending_lesson_for_track(
     track: Dict[str, Any], metadata: Dict[str, Any], catalog: Dict[str, Any]
 ) -> Optional[Dict[str, Any]]:
     completed_lesson_ids = get_completed_lesson_ids(metadata)
-    current = get_current_lesson(metadata, catalog)
+    current = _active_lesson_for_track(track, metadata, catalog)
     if (
         current
         and current["track_id"] == track["track_id"]
@@ -1231,13 +1233,13 @@ def _resolve_track_or_lesson_target(
 
 
 def _select_active_lesson(
-    catalog: Dict[str, Any], metadata: Dict[str, Any], *, prefer_fzf: bool = True
+    catalog: Dict[str, Any], metadata: Dict[str, Any], *, use_selector: bool = True
 ) -> Optional[Dict[str, Any]]:
-    return _select_from_options(
+    return select_from_options(
         _active_lesson_candidates(catalog, metadata),
         _lesson_selection_label,
         "Select active lesson: ",
-        prefer_fzf=prefer_fzf,
+        use_selector=use_selector,
     )
 
 
@@ -1246,7 +1248,7 @@ def _complete_lesson_and_advance(
 ) -> Dict[str, Any]:
     completed_lesson_ids = get_completed_lesson_ids(metadata)
     if lesson["lesson_id"] not in completed_lesson_ids:
-        metadata["current_lesson_id"] = lesson["lesson_id"]
+        _set_active_lesson(metadata, lesson)
     return _mark_lesson_completed(lesson, metadata, catalog)
 
 
@@ -1274,12 +1276,22 @@ def _mark_lesson_completed(
     track_completed = False
     suggested_tracks: List[Dict[str, Any]] = []
 
-    if metadata.get("current_lesson_id") == lesson["lesson_id"]:
+    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    should_advance_track = (
+        current_lesson_ids_by_track.get(lesson["track_id"]) == lesson["lesson_id"]
+        or metadata.get("current_lesson_id") == lesson["lesson_id"]
+    )
+
+    if should_advance_track:
         next_lesson = catalog_get_next_lesson(lesson["lesson_id"], metadata, catalog)
         if next_lesson:
-            metadata["current_lesson_id"] = next_lesson["lesson_id"]
+            _set_active_lesson(metadata, next_lesson)
         else:
-            metadata["current_lesson_id"] = None
+            _clear_active_track(
+                metadata,
+                lesson["track_id"],
+                completed_lesson_id=lesson["lesson_id"],
+            )
             track_completed = True
             suggested_tracks = _suggest_unlocked_tracks(
                 catalog, metadata, lesson["track_id"]
@@ -1412,7 +1424,7 @@ def display_lessons_tree(
     console.print(root)
 
 
-def _display_track_lessons_table(
+def _display_track_lessons_plain(
     selected_track: Dict[str, Any],
     metadata: Dict[str, Any],
     *,
@@ -1421,7 +1433,6 @@ def _display_track_lessons_table(
     pending: bool = False,
     difficulty: Optional[str] = None,
 ) -> bool:
-    console = Console()
     completed_ids = get_completed_lesson_ids(metadata)
     current_lesson_id = metadata.get("current_lesson_id")
     lessons = [
@@ -1441,26 +1452,12 @@ def _display_track_lessons_table(
         typer.echo("❌ No lessons matched the requested filters.")
         return False
 
-    table = Table(show_header=True, header_style="bold blue")
-    table.add_column("Status", style="cyan")
-    table.add_column("Seq", style="white")
-    table.add_column("Lesson", style="white")
-    table.add_column("Minutes", style="green")
-
     for lesson in lessons:
-        table.add_row(
-            _lesson_icon(lesson),
-            lesson["sequence_label"],
-            f"{lesson['title']}{_lesson_kind_badge(lesson)}",
-            str(lesson.get("estimated_time") or "-"),
+        typer.echo(
+            f"{_lesson_status_label(lesson):<7} "
+            f"{lesson['sequence_label']} "
+            f"{lesson['title']}{_lesson_kind_badge(lesson)}"
         )
-
-    console.print(table)
-    console.print(
-        f"\n📚 {selected_track['name']} "
-        f"({_classification_display_name({'classification_name': selected_track.get('classification_name'), 'classification_id': selected_track['classification']})}) "
-        f"| {_track_progress_label(selected_track, include_private=include_private)} completed"
-    )
     return True
 
 
@@ -1577,17 +1574,37 @@ def show_track(
         Optional[str],
         typer.Argument(help="Track id to inspect"),
     ] = None,
+    list_tracks: Annotated[
+        bool,
+        typer.Option("--list", help="List published tracks as plain text"),
+    ] = False,
     include_private: Annotated[
         bool, typer.Option("--include-private", help="Include private lessons")
     ] = False,
-    fzf: Annotated[
+    selector: Annotated[
         bool,
-        typer.Option("--fzf/--no-fzf", help="Use fzf when selecting a track"),
+        typer.Option(
+            "--selector/--prompt",
+            help="Use the native fuzzy selector when selecting a track",
+        ),
     ] = True,
 ):
-    """Inspect one active track, selecting it interactively when omitted."""
+    """Inspect one published track, selecting it interactively when omitted."""
+    if list_tracks:
+        catalog = _load_catalog_or_exit(quiet_warnings=True)
+        tracks = _published_track_candidates(catalog)
+        if not tracks:
+            typer.echo("No published tracks found.")
+            return
+        for track_item in tracks:
+            typer.echo(_plain_track_label(track_item))
+        return
+
     metadata = _load_metadata_or_exit()
-    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+    catalog = _attach_progress_or_exit(
+        _load_catalog_or_exit(quiet_warnings=True),
+        metadata,
+    )
 
     if track:
         try:
@@ -1596,17 +1613,17 @@ def show_track(
             typer.echo(f"❌ {exc}", err=True)
             raise typer.Exit(1)
     else:
-        selected_track = _select_from_options(
-            _open_track_candidates(catalog),
+        selected_track = select_from_options(
+            _published_track_candidates(catalog),
             _track_selection_label,
             "Select track: ",
-            prefer_fzf=fzf,
+            use_selector=selector,
         )
         if not selected_track:
-            typer.echo("❌ No active tracks selected.")
+            typer.echo("❌ No published tracks selected.")
             raise typer.Exit(1)
 
-    _display_track_lessons_table(
+    _display_track_lessons_plain(
         selected_track,
         metadata,
         include_private=include_private,
@@ -1699,9 +1716,12 @@ def open_current_lesson(
         bool,
         typer.Option("--web", help="Open the current lesson in the generated website"),
     ] = False,
-    fzf: Annotated[
+    selector: Annotated[
         bool,
-        typer.Option("--fzf/--no-fzf", help="Use fzf when selecting a lesson"),
+        typer.Option(
+            "--selector/--prompt",
+            help="Use the native fuzzy selector when selecting a lesson",
+        ),
     ] = True,
 ):
     """Open an active lesson using the configured editor or website."""
@@ -1715,12 +1735,13 @@ def open_current_lesson(
             typer.echo(f"❌ {exc}", err=True)
             raise typer.Exit(1)
     else:
-        current = _select_active_lesson(catalog, metadata, prefer_fzf=fzf)
+        current = _select_active_lesson(catalog, metadata, use_selector=selector)
         if not current:
             typer.echo("❌ No active lessons found. Use 'mystuff learn start' first.")
             raise typer.Exit(1)
 
-    metadata["current_lesson_id"] = current["lesson_id"]
+    _ensure_global_current_lesson_is_tracked(metadata, catalog)
+    _set_active_lesson(metadata, current)
     metadata["last_opened_at"] = datetime.datetime.now().isoformat()
     _save_metadata_or_exit(metadata)
     _open_lesson_path(current, web=web)
@@ -1762,7 +1783,10 @@ def list_lessons(
 ):
     """List tracks or lessons in the current learning catalog."""
     metadata = _load_metadata_or_exit()
-    catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+    catalog = _attach_progress_or_exit(
+        _load_catalog_or_exit(quiet_warnings=bool(track)),
+        metadata,
+    )
 
     if classification and classification not in catalog.get(
         "classifications_by_id", {}
@@ -1805,7 +1829,7 @@ def list_lessons(
             typer.echo(f"❌ {exc}", err=True)
             raise typer.Exit(1)
 
-        _display_track_lessons_table(
+        _display_track_lessons_plain(
             selected_track,
             metadata,
             include_private=include_private,
@@ -1979,9 +2003,12 @@ def next_lesson(
     web: Annotated[
         bool, typer.Option("--web", help="Open the next lesson in the website")
     ] = False,
-    fzf: Annotated[
+    selector: Annotated[
         bool,
-        typer.Option("--fzf/--no-fzf", help="Use fzf when selecting a lesson"),
+        typer.Option(
+            "--selector/--prompt",
+            help="Use the native fuzzy selector when selecting a lesson",
+        ),
     ] = True,
 ):
     """Complete an active lesson and advance within the same track."""
@@ -1995,7 +2022,7 @@ def next_lesson(
             typer.echo(f"❌ {exc}", err=True)
             raise typer.Exit(1)
     else:
-        current = _select_active_lesson(catalog, metadata, prefer_fzf=fzf)
+        current = _select_active_lesson(catalog, metadata, use_selector=selector)
         if not current:
             typer.echo("❌ No active lessons found. Use 'mystuff learn start' first.")
             raise typer.Exit(1)
@@ -2032,9 +2059,12 @@ def start_lesson(
             help="Track id, lesson reference (track_id/NNN[.md]), or lesson_id"
         ),
     ] = None,
-    fzf: Annotated[
+    selector: Annotated[
         bool,
-        typer.Option("--fzf/--no-fzf", help="Use fzf when selecting a track"),
+        typer.Option(
+            "--selector/--prompt",
+            help="Use the native fuzzy selector when selecting a track",
+        ),
     ] = True,
 ):
     """Start or resume a track-aware lesson flow."""
@@ -2042,11 +2072,11 @@ def start_lesson(
     catalog = _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
 
     if lesson is None:
-        selected_track = _select_from_options(
+        selected_track = select_from_options(
             _unstarted_track_candidates(catalog),
             _track_selection_label,
             "Start track: ",
-            prefer_fzf=fzf,
+            use_selector=selector,
         )
         if not selected_track:
             typer.echo("❌ No unstarted tracks available to select.")
@@ -2059,7 +2089,8 @@ def start_lesson(
         typer.echo(f"❌ {exc}", err=True)
         raise typer.Exit(1)
 
-    metadata["current_lesson_id"] = target_lesson["lesson_id"]
+    _ensure_global_current_lesson_is_tracked(metadata, catalog)
+    _set_active_lesson(metadata, target_lesson)
     _save_metadata_or_exit(metadata)
     typer.echo(
         f"📚 Current lesson set to: {target_lesson['track_id']}/{target_lesson['sequence_label']} "
@@ -2067,7 +2098,7 @@ def start_lesson(
     )
 
     if typer.confirm("Open this lesson now?", default=True):
-        open_current_lesson(reference=target_lesson["lesson_id"], fzf=False)
+        open_current_lesson(reference=target_lesson["lesson_id"])
 
 
 @learn_app.command("stats")
@@ -2228,7 +2259,7 @@ def reset_progress(
         typer.echo("❌ Operation cancelled.")
         raise typer.Exit(0)
 
-    _save_metadata_or_exit(dict(METADATA_TEMPLATE))
+    _save_metadata_or_exit(fresh_metadata_template())
     typer.echo("✅ Learning progress has been reset.")
 
 

@@ -24,6 +24,7 @@ from mystuff.learning_catalog import (
     attach_progress,
     get_completed_lesson_ids,
     get_current_lesson,
+    get_current_lesson_ids_by_track,
     load_learning_catalog,
     load_metadata,
 )
@@ -202,10 +203,10 @@ def get_config_path() -> Path:
 def load_config() -> Dict[str, Any]:
     """Load mystuff configuration."""
     config_path = get_config_path()
-    
+
     if not config_path.exists():
         return {}
-    
+
     try:
         with open(config_path, "r") as f:
             return yaml.safe_load(f) or {}
@@ -217,45 +218,45 @@ def load_config() -> Dict[str, Any]:
 def extract_lesson_title(lesson_content: str) -> Optional[str]:
     """
     Extract and format lesson title from markdown content.
-    
+
     Expected format in the markdown:
         # Day XXX: Title
         # Topic: Topic Name
-    
+
     Returns formatted as: "Day XXX: Title (Topic Name)"
-    
+
     Args:
         lesson_content: The markdown content of the lesson
-        
+
     Returns:
         Formatted title string or None if format doesn't match
     """
     import re
-    
+
     lines = lesson_content.strip().split('\n')
-    
+
     day_title = None
     topic = None
-    
+
     for line in lines:
         line = line.strip()
-        
+
         # Match "# Day XXX: Title"
         day_match = re.match(r'^#\s+Day\s+(\d+):\s*(.+)$', line, re.IGNORECASE)
         if day_match and not day_title:
             day_number = day_match.group(1)
             title = day_match.group(2).strip()
             day_title = f"Day {day_number}: {title}"
-        
+
         # Match "# Topic: Topic Name"
         topic_match = re.match(r'^#\s+Topic:\s*(.+)$', line, re.IGNORECASE)
         if topic_match and not topic:
             topic = topic_match.group(1).strip()
-        
+
         # Stop if we found both
         if day_title and topic:
             break
-    
+
     # Format the result
     if day_title and topic:
         return f"{day_title} ({topic})"
@@ -268,63 +269,63 @@ def extract_lesson_title(lesson_content: str) -> Optional[str]:
 def extract_lesson_topic(lesson_content: str) -> Optional[str]:
     """
     Extract only the topic from markdown content.
-    
+
     Expected format in the markdown:
         # Topic: Topic Name
-    
+
     Args:
         lesson_content: The markdown content of the lesson
-        
+
     Returns:
         Topic name or None if not found
     """
     import re
-    
+
     lines = lesson_content.strip().split('\n')
-    
+
     for line in lines:
         line = line.strip()
-        
+
         # Match "# Topic: Topic Name"
         topic_match = re.match(r'^#\s+Topic:\s*(.+)$', line, re.IGNORECASE)
         if topic_match:
             return topic_match.group(1).strip()
-    
+
     return None
 
 
 def extract_frontmatter(content: str) -> tuple[Optional[Dict[str, Any]], str]:
     """
     Extract YAML frontmatter from markdown content.
-    
+
     Args:
         content: The full markdown content
-        
+
     Returns:
         Tuple of (frontmatter_dict, content_without_frontmatter)
     """
     import re
-    
+
     # Check if content starts with frontmatter delimiter
     if not content.startswith('---'):
         return None, content
-    
+
     # Find the closing delimiter
     pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
     match = re.match(pattern, content, re.DOTALL)
-    
+
     if not match:
         return None, content
-    
+
     frontmatter_yaml = match.group(1)
     content_without_frontmatter = match.group(2)
-    
+
     try:
         frontmatter = yaml.safe_load(frontmatter_yaml)
         return frontmatter, content_without_frontmatter
     except yaml.YAMLError:
         return None, content
-    
+
     return None
 
 
@@ -332,7 +333,7 @@ def get_generate_config() -> Dict[str, Any]:
     """Get generate configuration from config.yaml."""
     config = load_config()
     generate_config = config.get("generate", {}).get("web", {})
-    
+
     # Set defaults if not configured
     defaults = {
         "output": str(Path.home() / "mystuff_web"),
@@ -345,49 +346,49 @@ def get_generate_config() -> Dict[str, Any]:
             {"name": "Home", "url": "/", "icon": "home"},
         ],
     }
-    
+
     # Merge with user config
     for key, value in defaults.items():
         if key not in generate_config:
             generate_config[key] = value
-    
+
     return generate_config
 
 
 def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict[str, Any]]:
     """Fetch details for specific GitHub repositories.
-    
+
     Uses GitHub's REST API to fetch repository information for the specified
     repository names. This works without authentication for public repositories.
-    
+
     Args:
         username: GitHub username
         repo_names: List of repository names to fetch
-        
+
     Returns:
         List of repository dictionaries with name, description, url, and language
     """
     if not username or not repo_names:
         return []
-    
+
     repos = []
-    
+
     for repo_name in repo_names:
         try:
             # GitHub REST API endpoint for a specific repository
             url = f"https://api.github.com/repos/{username}/{repo_name}"
-            
+
             headers = {
                 "Accept": "application/vnd.github.v3+json",
                 "User-Agent": "mystuff-cli",
             }
-            
+
             req = urllib.request.Request(url, headers=headers)
-            
+
             # Make the request
             with urllib.request.urlopen(req, timeout=10) as response:
                 repo_data = json.loads(response.read().decode("utf-8"))
-            
+
             # Extract repository information
             repo = {
                 "name": repo_data["name"],
@@ -396,7 +397,7 @@ def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict
                 "language": repo_data.get("language")
             }
             repos.append(repo)
-            
+
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 console.print(
@@ -416,7 +417,7 @@ def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict
             console.print(
                 f"[yellow]⚠️  Warning: Could not fetch repo '{repo_name}': {e}[/yellow]"
             )
-    
+
     return repos
 
 
@@ -424,13 +425,13 @@ def load_mystuff_links() -> List[Dict[str, Any]]:
     """Load links from mystuff links.jsonl file."""
     mystuff_dir = get_mystuff_dir()
     links_file = mystuff_dir / "links.jsonl"
-    
+
     if not links_file.exists():
         console.print(
             "[yellow]⚠️  Warning: links.jsonl not found, links page will be empty[/yellow]"
         )
         return []
-    
+
     links = []
     try:
         with open(links_file, "r", encoding="utf-8") as f:
@@ -439,7 +440,7 @@ def load_mystuff_links() -> List[Dict[str, Any]]:
                     links.append(json.loads(line))
     except Exception as e:
         console.print(f"[yellow]⚠️  Warning: Could not load links: {e}[/yellow]")
-    
+
     return links
 
 
@@ -453,8 +454,12 @@ def _public_tracks(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
     return [
         track
         for track in catalog["tracks"]
-        if track["status"] == "active" and track.get("public", True)
+        if _is_track_published(track)
     ]
+
+
+def _is_track_published(track: Dict[str, Any]) -> bool:
+    return track["status"] == "active" and track.get("public", True)
 
 
 def _public_lessons(track: Dict[str, Any]) -> List[Dict[str, Any]]:
@@ -462,12 +467,12 @@ def _public_lessons(track: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _public_lesson_status(
-    lesson: Dict[str, Any], completed_ids: set, current_lesson_id: Optional[str]
+    lesson: Dict[str, Any], completed_ids: set, current_lesson_ids: set
 ) -> str:
-    if lesson["lesson_id"] == current_lesson_id:
-        return "current"
     if lesson["lesson_id"] in completed_ids:
         return "done"
+    if lesson["lesson_id"] in current_lesson_ids:
+        return "current"
     return "todo"
 
 
@@ -502,30 +507,111 @@ def load_learning_data() -> Optional[Dict[str, Any]]:
     }
 
 
+def _first_open_lesson(track: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    current_lesson = next(
+        (
+            lesson
+            for lesson in track["lessons"]
+            if (lesson.get("status") or lesson.get("progress_status")) == "current"
+        ),
+        None,
+    )
+    if current_lesson:
+        return current_lesson
+
+    return next(
+        (
+            lesson
+            for lesson in track["lessons"]
+            if (lesson.get("status") or lesson.get("progress_status")) != "done"
+        ),
+        None,
+    )
+
+
+def load_active_learning_data() -> List[Dict[str, Any]]:
+    """Load compact current/open learning items for the home page."""
+    try:
+        catalog, metadata = _load_catalog_with_progress()
+    except LearningCatalogError as exc:
+        console.print(
+            f"[yellow]⚠️  Warning: Could not load learning data: {exc}[/yellow]"
+        )
+        return []
+
+    current_lesson_id = metadata.get("current_lesson_id")
+    learning_items: List[Dict[str, Any]] = []
+    for track in catalog["tracks"]:
+        if track["status"] != "active" or track.get("progress_status") != "in_progress":
+            continue
+
+        lesson = _first_open_lesson(track)
+        if not lesson:
+            continue
+
+        is_published = track.get("public", True) and lesson.get("public", True)
+        learning_items.append(
+            {
+                "current_lesson_id": lesson["lesson_id"],
+                "lesson_title": lesson["title"],
+                "lesson_url": lesson["url"] if is_published else None,
+                "track_id": track["track_id"],
+                "track_name": track["name"],
+                "track_url": track["url"] if track.get("public", True) else None,
+                "classification_id": track["classification"],
+                "classification_name": track.get("classification_name")
+                or track["classification"].replace("-", " ").title(),
+                "classification_url": (
+                    f"classifications/{track['classification']}.html"
+                    if track.get("public", True)
+                    else None
+                ),
+                "last_opened_at": (
+                    metadata.get("last_opened_at")
+                    if lesson["lesson_id"] == current_lesson_id
+                    else None
+                ),
+                "is_current": lesson["lesson_id"] == current_lesson_id,
+            }
+        )
+
+    learning_items.sort(key=lambda item: (not item["is_current"], item["track_id"]))
+    return learning_items
+
+
 def load_all_tracks_with_status() -> List[Dict[str, Any]]:
-    """Load all public tracks with public lessons and progress metadata."""
+    """Load all tracks for catalog display, linking only published tracks."""
     catalog, metadata = _load_catalog_with_progress()
     completed_ids = get_completed_lesson_ids(metadata)
     current_lesson_id = metadata.get("current_lesson_id")
+    current_lesson_ids = set(get_current_lesson_ids_by_track(metadata).values())
+    if current_lesson_id:
+        current_lesson_ids.add(str(current_lesson_id))
 
     tracks: List[Dict[str, Any]] = []
-    for track in _public_tracks(catalog):
+    for track in catalog["tracks"]:
+        is_published = _is_track_published(track)
         public_lessons = []
         completed_public_count = 0
-        for lesson in _public_lessons(track):
-            lesson_copy = dict(lesson)
-            lesson_copy["status"] = _public_lesson_status(
-                lesson_copy, completed_ids, current_lesson_id
-            )
-            lesson_copy["display_title"] = (
-                f"{lesson_copy['sequence_label']}. {lesson_copy['title']}"
-            )
-            lesson_copy["track_page_url"] = f"../tracks/{track['track_id']}.html"
-            if lesson_copy["status"] == "done":
-                completed_public_count += 1
-            public_lessons.append(lesson_copy)
+        if is_published:
+            for lesson in _public_lessons(track):
+                lesson_copy = dict(lesson)
+                lesson_copy["status"] = _public_lesson_status(
+                    lesson_copy, completed_ids, current_lesson_ids
+                )
+                lesson_copy["display_title"] = (
+                    f"{lesson_copy['sequence_label']}. {lesson_copy['title']}"
+                )
+                lesson_copy["track_page_url"] = f"../tracks/{track['track_id']}.html"
+                if lesson_copy["status"] == "done":
+                    completed_public_count += 1
+                public_lessons.append(lesson_copy)
 
-        if public_lessons:
+        if not is_published:
+            public_progress_status = (
+                "draft" if track["status"] == "draft" else "unpublished"
+            )
+        elif public_lessons:
             if completed_public_count == len(public_lessons):
                 public_progress_status = "done"
             elif any(lesson["status"] == "current" for lesson in public_lessons):
@@ -541,6 +627,9 @@ def load_all_tracks_with_status() -> List[Dict[str, Any]]:
 
         track_copy = dict(track)
         track_copy["lessons"] = public_lessons
+        track_copy["is_published"] = is_published
+        track_copy["track_url"] = track["url"] if is_published else None
+        track_copy["display_lesson_count"] = track["lesson_count"]
         track_copy["public_lesson_count"] = len(public_lessons)
         track_copy["completed_public_count"] = completed_public_count
         track_copy["public_progress_status"] = public_progress_status
@@ -572,15 +661,45 @@ def group_tracks_by_classification(tracks: List[Dict[str, Any]]) -> List[Dict[st
 
         classification["tracks"].append(track)
         classification["track_count"] += 1
-        classification["lesson_count"] += track["public_lesson_count"]
+        classification["lesson_count"] += track["display_lesson_count"]
 
     return classifications
+
+
+def group_tracks_by_roadmap(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Group already-loaded tracks by roadmap for rendering."""
+    roadmaps_by_id: Dict[str, Dict[str, Any]] = {}
+    roadmaps: List[Dict[str, Any]] = []
+
+    for track in tracks:
+        roadmap_id = track.get("roadmap") or "uncategorized"
+        roadmap = roadmaps_by_id.get(roadmap_id)
+        if roadmap is None:
+            roadmap = {
+                "roadmap_id": roadmap_id,
+                "roadmap_name": track.get("roadmap_name")
+                or roadmap_id.replace("-", " ").title(),
+                "url": f"roadmaps/{roadmap_id}.html",
+                "tracks": [],
+                "track_count": 0,
+                "lesson_count": 0,
+            }
+            roadmaps_by_id[roadmap_id] = roadmap
+            roadmaps.append(roadmap)
+
+        roadmap["tracks"].append(track)
+        roadmap["track_count"] += 1
+        roadmap["lesson_count"] += track["display_lesson_count"]
+
+    return roadmaps
 
 
 def load_all_lessons_with_status() -> List[Dict[str, Any]]:
     """Load all public lessons with status information."""
     lessons: List[Dict[str, Any]] = []
     for track in load_all_tracks_with_status():
+        if not track["is_published"]:
+            continue
         for lesson in track["lessons"]:
             lesson_copy = dict(lesson)
             lesson_copy["track_name"] = track["name"]
@@ -607,21 +726,21 @@ def ensure_output_structure(output_dir: Path) -> None:
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / "css").mkdir(exist_ok=True)
     (output_dir / "js").mkdir(exist_ok=True)
-    
+
     console.print(f"✅ Created output directory: {output_dir}")
 
 
 def copy_static_files(output_dir: Path) -> None:
     """Copy static CSS and JS files to output directory."""
     static_dir = get_static_dir()
-    
+
     if not static_dir.exists():
         console.print(
             "[yellow]⚠️  Warning: Static files directory not found, "
             "skipping copy[/yellow]"
         )
         return
-    
+
     # Copy the active brutalist stylesheet only. Legacy CSS snapshots are kept
     # in the package for reference but should not be published as site assets.
     css_src = static_dir / "css"
@@ -632,21 +751,21 @@ def copy_static_files(output_dir: Path) -> None:
         if legacy_path.exists():
             legacy_path.unlink()
             console.print(f"  🧹 Removed legacy {legacy_css}")
-    
+
     css_file = css_src / "style.css"
     if css_file.exists():
         shutil.copy2(css_file, css_dest)
         console.print(f"  📄 Copied {css_file.name}")
-    
+
     # Copy JS files if they exist
     js_src = static_dir / "js"
     js_dest = output_dir / "js"
-    
+
     if js_src.exists():
         for js_file in js_src.glob("*.js"):
             shutil.copy2(js_file, js_dest)
             console.print(f"  📄 Copied {js_file.name}")
-    
+
     # Copy favicon if it exists
     favicon_src = static_dir / "favicon.ico"
     if favicon_src.exists():
@@ -659,23 +778,23 @@ def render_template(
 ) -> None:
     """Render a Jinja2 template with given context to output path."""
     templates_dir = get_templates_dir()
-    
+
     if not templates_dir.exists():
         raise typer.Exit(
             f"❌ Templates directory not found: {templates_dir}\n"
             "Please ensure the package is properly installed."
         )
-    
+
     template_loader = jinja2.FileSystemLoader(searchpath=str(templates_dir))
     template_env = jinja2.Environment(loader=template_loader)
-    
+
     try:
         template = template_env.get_template(template_name)
         output = template.render(**context)
-        
+
         with open(output_path, "w", encoding="utf-8") as f:
             f.write(output)
-        
+
         console.print(f"  ✅ Generated {output_path.name}")
     except jinja2.TemplateNotFound:
         console.print(
@@ -756,6 +875,38 @@ def generate_classification_pages(
         render_template("classification.html", context, output_path)
 
     console.print(f"  ✅ Generated {len(classifications)} classification pages")
+
+
+def generate_roadmap_pages(
+    output_dir: Path,
+    config: Dict[str, Any],
+    generated_at: str,
+    roadmaps: List[Dict[str, Any]],
+) -> None:
+    """Generate one catalog page per roadmap."""
+    if not roadmaps:
+        console.print("  ℹ️  No roadmaps found, skipping roadmap pages")
+        return
+
+    roadmaps_output = output_dir / "roadmaps"
+    roadmaps_output.mkdir(exist_ok=True)
+
+    console.print(f"  🗺️  Generating {len(roadmaps)} roadmap pages...")
+    for roadmap in roadmaps:
+        output_path = roadmaps_output / f"{roadmap['roadmap_id']}.html"
+        context = {
+            "title": config.get("title", "My Knowledge Base"),
+            "description": config.get("description", "Personal knowledge management"),
+            "author": config.get("author", "Your Name"),
+            "menu_items": config.get("menu_items", []),
+            "roadmap": roadmap,
+            "tracks": roadmap["tracks"],
+            "relative_root": "../",
+            "generated_at": generated_at,
+        }
+        render_template("roadmap.html", context, output_path)
+
+    console.print(f"  ✅ Generated {len(roadmaps)} roadmap pages")
 
 
 def generate_track_pages(
@@ -904,7 +1055,10 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
 
     console.print("\n📖 Loading learning data...")
     learning = load_learning_data()
-    if learning:
+    active_learning = load_active_learning_data()
+    if active_learning:
+        console.print(f"  ✅ Current learning entries: {len(active_learning)}")
+    elif learning:
         console.print(
             f"  ✅ Current lesson: {learning['track_id']}/{learning['current_lesson_id']}"
         )
@@ -913,9 +1067,14 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
 
     console.print("\n🧱 Loading tracks...")
     tracks = load_all_tracks_with_status()
-    console.print(f"  ✅ Found {len(tracks)} public tracks")
+    published_tracks = [track for track in tracks if track["is_published"]]
+    console.print(
+        f"  ✅ Found {len(tracks)} tracks ({len(published_tracks)} published)"
+    )
     classifications = group_tracks_by_classification(tracks)
     console.print(f"  ✅ Grouped into {len(classifications)} classifications")
+    roadmaps = group_tracks_by_roadmap(tracks)
+    console.print(f"  ✅ Grouped into {len(roadmaps)} roadmaps")
 
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
 
@@ -928,8 +1087,10 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         "repositories": repos,
         "links_json": json.dumps(links),
         "learning": learning,
+        "active_learning": active_learning,
         "tracks": tracks,
         "classifications": classifications,
+        "roadmaps": roadmaps,
         "generated_at": generated_at,
     }
 
@@ -962,15 +1123,23 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
             "[yellow]  ⚠️  Skipping classification pages (template not found)[/yellow]"
         )
 
+    roadmap_template = get_templates_dir() / "roadmap.html"
+    if roadmap_template.exists():
+        generate_roadmap_pages(output_dir, config, generated_at, roadmaps)
+    else:
+        console.print(
+            "[yellow]  ⚠️  Skipping roadmap pages (template not found)[/yellow]"
+        )
+
     track_template = get_templates_dir() / "track.html"
     if track_template.exists():
-        generate_track_pages(output_dir, config, generated_at, tracks)
+        generate_track_pages(output_dir, config, generated_at, published_tracks)
     else:
         console.print(
             "[yellow]  ⚠️  Skipping track pages (template not found)[/yellow]"
         )
 
-    generate_lesson_pages(output_dir, config, generated_at, tracks=tracks)
+    generate_lesson_pages(output_dir, config, generated_at, tracks=published_tracks)
 
     console.print("\n✨ Website generation complete!")
     console.print(f"\n🌐 Open {output_dir / 'index.html'} in your browser\n")
@@ -1004,17 +1173,17 @@ def generate_web(
     ] = False,
 ) -> None:
     """Generate a static website from mystuff data.
-    
+
     Creates a minimal, elegant static website with a sidebar menu
     similar to https://jepemo.github.io/
-    
+
     Examples:
         # Generate with default settings
         mystuff generate web
-        
+
         # Generate to specific directory
         mystuff generate web --output ~/my-website
-        
+
         # Specify type explicitly
         mystuff generate web --type static_web --output ./dist
     """
@@ -1025,17 +1194,17 @@ def generate_web(
             f"Currently only 'static_web' is supported.[/red]"
         )
         raise typer.Exit(1)
-    
+
     # Load configuration
     config = get_generate_config()
-    
+
     # Determine output directory
     if output is None:
         output = Path(config.get("output", str(Path.home() / "mystuff_web")))
-    
+
     # Expand user path
     output = output.expanduser().resolve()
-    
+
     # Check if output directory exists and has content
     if output.exists() and any(output.iterdir()):
         if not force:
@@ -1046,7 +1215,7 @@ def generate_web(
             ):
                 console.print("\n❌ Generation cancelled.")
                 raise typer.Exit(0)
-    
+
     # Generate the website
     try:
         generate_static_web(output, config)

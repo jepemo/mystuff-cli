@@ -42,6 +42,7 @@ def create_track(
     depends_on_tracks: list[str],
     status: str,
     lessons: list[dict],
+    public: bool = True,
 ) -> None:
     track_dir = lessons_dir / track_id
     track_dir.mkdir(parents=True)
@@ -55,6 +56,7 @@ def create_track(
         "target_lesson_count": len(lessons),
         "depends_on_tracks": depends_on_tracks,
         "status": status,
+        "public": public,
         "lesson_count": len(lessons),
         "difficulty_min": "beginner",
         "difficulty_max": "advanced",
@@ -195,6 +197,7 @@ def test_load_metadata_creates_v2_file(temp_learning_dir):
 
     assert metadata["schema_version"] == 2
     assert metadata["current_lesson_id"] is None
+    assert metadata["current_lesson_ids_by_track"] == {}
     assert metadata["last_opened_at"] is None
     assert metadata["completed_lessons"] == []
 
@@ -258,15 +261,156 @@ def test_start_track_sets_first_pending_lesson(temp_learning_dir):
     assert result.exit_code == 0
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
+    assert metadata["current_lesson_ids_by_track"] == {"foundations": "100"}
+
+
+def test_start_track_preserves_other_started_tracks(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "databases",
+        name="Databases",
+        description="Storage basics.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Database Basics",
+                "difficulty": "beginner",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    runner = CliRunner()
+
+    first = runner.invoke(app, ["learn", "start", "foundations"], input="n\n")
+    second = runner.invoke(app, ["learn", "start", "databases"], input="n\n")
+
+    assert first.exit_code == 0
+    assert second.exit_code == 0
+    metadata = load_metadata()
+    assert metadata["current_lesson_id"] == "300"
+    assert metadata["current_lesson_ids_by_track"] == {
+        "foundations": "100",
+        "databases": "300",
+    }
+
+
+def test_start_track_preserves_legacy_global_current_lesson(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "databases",
+        name="Databases",
+        description="Storage basics.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Database Basics",
+                "difficulty": "beginner",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "300",
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "start", "foundations"], input="n\n")
+
+    assert result.exit_code == 0
+    metadata = load_metadata()
+    assert metadata["current_lesson_id"] == "100"
+    assert metadata["current_lesson_ids_by_track"] == {
+        "databases": "300",
+        "foundations": "100",
+    }
+
+
+def test_start_rejects_unpublished_track(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "private-api",
+        name="Private API",
+        description="Unpublished work.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        public=False,
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Private API Draft",
+                "difficulty": "beginner",
+            }
+        ],
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "start", "private-api"])
+
+    assert result.exit_code == 1
+    assert "not published" in result.output
+    assert load_metadata()["current_lesson_id"] is None
+
+
+def test_start_rejects_unpublished_lesson(temp_learning_dir):
+    lesson_path = temp_learning_dir / "lessons" / "foundations" / "002.md"
+    lesson_path.write_text(
+        lesson_path.read_text(encoding="utf-8").replace(
+            "public: true", "public: false", 1
+        ),
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "start", "foundations/002"])
+
+    assert result.exit_code == 1
+    assert "not published" in result.output
+    assert load_metadata()["current_lesson_id"] is None
 
 
 def test_start_without_argument_selects_unstarted_track(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "private-api",
+        name="Private API",
+        description="Unpublished work.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        public=False,
+        lessons=[
+            {
+                "lesson_id": "050",
+                "sequence": 1,
+                "title": "Private API Draft",
+                "difficulty": "beginner",
+            }
+        ],
+    )
     runner = CliRunner()
 
     result = runner.invoke(app, ["learn", "start"], input="1\nn\n")
 
     assert result.exit_code == 0
     assert "Start track" in result.output
+    assert "Private API" not in result.output
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
 
@@ -279,6 +423,86 @@ def test_track_without_argument_selects_active_track(temp_learning_dir):
     assert result.exit_code == 0
     assert "Select track" in result.output
     assert "Intro to Foundations" in result.output
+    assert "todo    001 Intro to Foundations" in result.output
+    assert "Status" not in result.output
+    assert "Minutes" not in result.output
+    assert "┏" not in result.output
+
+
+def test_track_outputs_plain_lesson_list_without_header(temp_learning_dir):
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "track", "foundations"])
+
+    assert result.exit_code == 0
+    assert result.output.splitlines() == [
+        "todo    001 Intro to Foundations",
+        "todo    002 Capstone Foundations [CAPSTONE]",
+    ]
+
+
+def test_track_list_outputs_published_tracks_as_plain_text(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "private-api",
+        name="Private API",
+        description="Unpublished work.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        public=False,
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Private API Draft",
+                "difficulty": "beginner",
+            }
+        ],
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "track", "--list"])
+
+    assert result.exit_code == 0
+    assert "foundations - Foundations" in result.output
+    assert "systems - Systems" in result.output
+    assert "private-api" not in result.output
+    assert "ai-lab" not in result.output
+    assert "┏" not in result.output
+    assert "Status" not in result.output
+
+
+def test_track_selector_uses_published_tracks_not_private_open_tracks(
+    temp_learning_dir,
+):
+    create_track(
+        temp_learning_dir / "lessons",
+        "private-api",
+        name="Private API",
+        description="Unpublished work.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        public=False,
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Private API Draft",
+                "difficulty": "beginner",
+            }
+        ],
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "track", "--prompt"], input="2\n")
+
+    assert result.exit_code == 0
+    assert "Select track" in result.output
+    assert "systems - Systems" in result.output
+    assert "Private API" not in result.output
+    assert "Distributed Reads" in result.output
 
 
 def test_current_without_argument_selects_active_lesson(temp_learning_dir, monkeypatch):
@@ -305,6 +529,7 @@ def test_current_without_argument_selects_active_lesson(temp_learning_dir, monke
     assert opened == [("100", False)]
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
+    assert metadata["current_lesson_ids_by_track"] == {"foundations": "100"}
     assert metadata["last_opened_at"]
 
 
@@ -325,6 +550,7 @@ def test_next_finishes_track_and_suggests_unlocked_tracks(temp_learning_dir):
     assert result.exit_code == 0
     reloaded = load_metadata()
     assert reloaded["current_lesson_id"] is None
+    assert reloaded["current_lesson_ids_by_track"] == {}
     assert "Track completed: foundations" in result.output
     assert "systems" in result.output
 
@@ -356,7 +582,7 @@ def test_list_track_progress_counts_only_visible_lessons(temp_learning_dir):
     result = runner.invoke(app, ["learn", "list", "--track", "systems"])
 
     assert result.exit_code == 0
-    assert "| 0/1 completed" in result.output
+    assert result.output.strip() == "todo    001 Distributed Reads"
 
 
 def test_catalog_groups_tracks_by_classification(temp_learning_dir):

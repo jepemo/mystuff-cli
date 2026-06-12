@@ -2,6 +2,7 @@
 """Tests for the generate module."""
 
 from pathlib import Path
+from typing import Optional
 
 import pytest
 import yaml
@@ -13,7 +14,9 @@ from mystuff.commands.generate import (
     generate_lesson_pages,
     generate_static_web,
     group_tracks_by_classification,
+    group_tracks_by_roadmap,
     get_generate_config,
+    load_active_learning_data,
     load_all_lessons_with_status,
     load_all_tracks_with_status,
     load_learning_data,
@@ -40,6 +43,8 @@ def create_track(
     depends_on_tracks: list[str],
     status: str,
     lessons: list[dict],
+    public: bool = True,
+    roadmap: Optional[str] = None,
 ) -> None:
     track_dir = lessons_dir / track_id
     track_dir.mkdir(parents=True)
@@ -49,10 +54,12 @@ def create_track(
         "name": name,
         "description": description,
         "classification": classification,
+        "roadmap": roadmap or classification,
         "track_tier": "core",
         "target_lesson_count": len(lessons),
         "depends_on_tracks": depends_on_tracks,
         "status": status,
+        "public": public,
         "lesson_count": len(lessons),
         "difficulty_min": "beginner",
         "difficulty_max": "advanced",
@@ -166,6 +173,7 @@ def sample_learning(temp_mystuff_dir):
         name="Systems",
         description="Distributed systems.",
         classification="complexity-and-dynamics",
+        roadmap="distributed-systems",
         depends_on_tracks=["foundations"],
         status="active",
         lessons=[
@@ -190,10 +198,32 @@ def sample_learning(temp_mystuff_dir):
     )
     create_track(
         lessons_dir,
+        "private-api",
+        name="Private API",
+        description="Internal API draft.",
+        classification="systems-thinking",
+        roadmap="backend",
+        depends_on_tracks=[],
+        status="active",
+        public=False,
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Private API Draft",
+                "difficulty": "beginner",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    create_track(
+        lessons_dir,
         "ai-lab",
         name="AI Lab",
         description="Draft work.",
         classification="complexity-and-dynamics",
+        roadmap="ai-lab",
         depends_on_tracks=["systems"],
         status="draft",
         lessons=[],
@@ -290,7 +320,81 @@ def test_load_learning_data_ignores_private_current_lesson(
     assert result is None
 
 
-def test_load_all_tracks_with_status_filters_draft_and_private(
+def test_load_active_learning_data_returns_open_public_lessons(
+    sample_learning, sample_config
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [{"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}],
+        }
+    )
+
+    result = load_active_learning_data()
+
+    assert len(result) == 1
+    assert result[0]["track_name"] == "Foundations"
+    assert result[0]["lesson_title"] == "Capstone Foundations"
+    assert result[0]["lesson_url"] == "lessons/foundations/002.html"
+    assert result[0]["is_current"] is False
+
+
+def test_load_active_learning_data_returns_started_tracks_without_completions(
+    sample_learning, sample_config
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "100",
+            "current_lesson_ids_by_track": {
+                "foundations": "100",
+                "systems": "200",
+            },
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    result = load_active_learning_data()
+
+    assert [(item["track_id"], item["current_lesson_id"]) for item in result] == [
+        ("foundations", "100"),
+        ("systems", "200"),
+    ]
+
+
+def test_load_active_learning_data_includes_unpublished_started_track(
+    sample_learning, sample_config
+):
+    track_path = sample_learning / "lessons" / "foundations" / "TRACK.md"
+    track_path.write_text(
+        track_path.read_text(encoding="utf-8").replace(
+            "public: true", "public: false", 1
+        ),
+        encoding="utf-8",
+    )
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "100",
+            "current_lesson_ids_by_track": {"foundations": "100"},
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    result = load_active_learning_data()
+
+    assert len(result) == 1
+    assert result[0]["track_id"] == "foundations"
+    assert result[0]["lesson_title"] == "Intro to Foundations"
+    assert result[0]["track_url"] is None
+    assert result[0]["lesson_url"] is None
+
+
+def test_load_all_tracks_with_status_includes_unpublished_tracks_without_links(
     sample_learning, sample_config
 ):
     save_metadata(
@@ -304,9 +408,18 @@ def test_load_all_tracks_with_status_filters_draft_and_private(
 
     tracks = load_all_tracks_with_status()
 
-    assert [track["track_id"] for track in tracks] == ["foundations", "systems"]
+    assert [track["track_id"] for track in tracks] == [
+        "foundations",
+        "systems",
+        "private-api",
+        "ai-lab",
+    ]
     assert [lesson["lesson_id"] for lesson in tracks[1]["lessons"]] == ["200"]
     assert tracks[0]["completed_public_count"] == 1
+    assert tracks[2]["track_url"] is None
+    assert tracks[2]["is_published"] is False
+    assert tracks[2]["public_progress_status"] == "unpublished"
+    assert tracks[3]["public_progress_status"] == "draft"
 
 
 def test_load_all_lessons_with_status_flattens_public_catalog(
@@ -343,8 +456,32 @@ def test_group_tracks_by_classification_preserves_order(sample_learning, sample_
         "systems-thinking",
         "complexity-and-dynamics",
     ]
-    assert classifications[0]["track_count"] == 1
-    assert [track["track_id"] for track in classifications[1]["tracks"]] == ["systems"]
+    assert classifications[0]["track_count"] == 2
+    assert [track["track_id"] for track in classifications[1]["tracks"]] == [
+        "systems",
+        "ai-lab",
+    ]
+
+
+def test_group_tracks_by_roadmap_preserves_order(sample_learning, sample_config):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "100",
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    roadmaps = group_tracks_by_roadmap(load_all_tracks_with_status())
+
+    assert [item["roadmap_id"] for item in roadmaps] == [
+        "systems-thinking",
+        "distributed-systems",
+        "backend",
+        "ai-lab",
+    ]
+    assert roadmaps[2]["tracks"][0]["track_id"] == "private-api"
 
 
 def test_learning_template_includes_switchable_tracks_view(
@@ -361,6 +498,7 @@ def test_learning_template_includes_switchable_tracks_view(
 
     tracks = load_all_tracks_with_status()
     classifications = group_tracks_by_classification(tracks)
+    roadmaps = group_tracks_by_roadmap(tracks)
     temp_output_dir.mkdir(parents=True, exist_ok=True)
 
     render_template(
@@ -373,6 +511,7 @@ def test_learning_template_includes_switchable_tracks_view(
             "learning": None,
             "tracks": tracks,
             "classifications": classifications,
+            "roadmaps": roadmaps,
             "generated_at": "2026-04-02",
         },
         temp_output_dir / "learning.html",
@@ -383,10 +522,14 @@ def test_learning_template_includes_switchable_tracks_view(
     assert "data-theme-toggle" in html_content
     assert 'data-learning-view-button="tracks"' in html_content
     assert 'data-learning-view="tracks"' in html_content
+    assert 'data-learning-view-button="roadmaps"' in html_content
+    assert 'data-learning-view="roadmaps"' in html_content
     assert "compact-track-group" not in html_content
     assert "compact-track-row" in html_content
     assert "Foundations" in html_content
+    assert "Private API" in html_content
     assert "Systems Thinking" in html_content
+    assert "Distributed Systems" in html_content
     assert "Core concepts." in html_content
     assert (
         'href="classifications/complexity-and-dynamics.html">Complexity And Dynamics'
@@ -395,7 +538,72 @@ def test_learning_template_includes_switchable_tracks_view(
     assert html_content.index(
         'href="tracks/systems.html">Systems'
     ) < html_content.index('href="tracks/foundations.html">Foundations')
+    assert 'href="tracks/private-api.html"' not in html_content
+    assert 'href="roadmaps/backend.html">Backend' in html_content
     assert "Explore the curriculum by classification" not in html_content
+
+
+def test_index_template_uses_compact_learning_status(
+    temp_output_dir,
+):
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+    active_learning = [
+        {
+            "track_name": "Foundations",
+            "track_url": "tracks/foundations.html",
+            "lesson_title": "Capstone Foundations",
+            "lesson_url": "lessons/foundations/002.html",
+        },
+        {
+            "track_name": "Systems",
+            "track_url": None,
+            "lesson_title": "Distributed Reads",
+            "lesson_url": None,
+        },
+    ]
+
+    render_template(
+        "index.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "learning": active_learning[0],
+            "active_learning": active_learning,
+            "classifications": [{"classification_id": "systems-thinking"}],
+            "repositories": [
+                {
+                    "name": "mystuff-cli",
+                    "description": "Personal CLI",
+                    "url": "https://example.com/mystuff-cli",
+                    "language": "Python",
+                }
+            ],
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "index.html",
+    )
+
+    html_content = (temp_output_dir / "index.html").read_text(encoding="utf-8")
+
+    assert 'class="stack-block home-learning"' in html_content
+    assert "Current Learning" in html_content
+    assert "current-learning-list" in html_content
+    assert "Foundations" in html_content
+    assert "Capstone Foundations" in html_content
+    assert "Systems" in html_content
+    assert "Distributed Reads" in html_content
+    assert 'href="tracks/systems.html"' not in html_content
+    assert 'href="lessons/systems/001.html"' not in html_content
+    assert "CURRENT LEARNING" not in html_content
+    assert "LEARNING HUB" not in html_content
+    assert "OSS" not in html_content
+    assert "Open Source" in html_content
+    assert "All tracks" not in html_content
+    assert "All learning" not in html_content
+    assert "Continue from the current lesson" not in html_content
+    assert "Last opened:" not in html_content
 
 
 def test_track_template_omits_lesson_minutes(
@@ -555,6 +763,10 @@ def test_generate_static_web_creates_track_and_lesson_pages(
         "{{ classification.classification_name }} {% for track in tracks %}{{ track.track_id }} {% endfor %}",
         encoding="utf-8",
     )
+    (templates_dir / "roadmap.html").write_text(
+        "{{ roadmap.roadmap_name }} {% for track in tracks %}{{ track.track_id }} {% endfor %}",
+        encoding="utf-8",
+    )
     (templates_dir / "track.html").write_text(
         "{{ classification.url }} {{ track.track_id }} {{ track.name }}",
         encoding="utf-8",
@@ -581,7 +793,9 @@ def test_generate_static_web_creates_track_and_lesson_pages(
     assert (temp_output_dir / "index.html").exists()
     assert (temp_output_dir / "learning.html").exists()
     assert (temp_output_dir / "classifications" / "systems-thinking.html").exists()
+    assert (temp_output_dir / "roadmaps" / "systems-thinking.html").exists()
     assert (temp_output_dir / "tracks" / "foundations.html").exists()
+    assert not (temp_output_dir / "tracks" / "private-api.html").exists()
     assert (temp_output_dir / "lessons" / "foundations" / "001.html").exists()
     assert not (temp_output_dir / "lessons" / "systems" / "002.html").exists()
     assert "systems-thinking->classifications/systems-thinking.html" in (
@@ -607,7 +821,9 @@ def test_extract_lesson_title_full_format():
 
 
 
-def test_load_all_tracks_with_status_filters_unpublished_track(sample_learning, sample_config):
+def test_load_all_tracks_with_status_keeps_unpublished_track_unlinked(
+    sample_learning, sample_config
+):
     save_metadata(
         {
             "schema_version": 2,
@@ -619,11 +835,16 @@ def test_load_all_tracks_with_status_filters_unpublished_track(sample_learning, 
     track_path = sample_learning / "lessons" / "foundations" / "TRACK.md"
     track_path.write_text(
         track_path.read_text(encoding="utf-8").replace(
-            "status: active", "status: active\npublic: false", 1
+            "public: true", "public: false", 1
         ),
         encoding="utf-8",
     )
 
     tracks = load_all_tracks_with_status()
 
-    assert {track["track_id"] for track in tracks} == {"systems"}
+    foundations = next(track for track in tracks if track["track_id"] == "foundations")
+
+    assert {track["track_id"] for track in tracks} >= {"foundations", "systems"}
+    assert foundations["is_published"] is False
+    assert foundations["track_url"] is None
+    assert foundations["lessons"] == []

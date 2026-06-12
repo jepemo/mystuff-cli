@@ -18,9 +18,21 @@ METADATA_SCHEMA_VERSION = 2
 METADATA_TEMPLATE_V2 = {
     "schema_version": METADATA_SCHEMA_VERSION,
     "current_lesson_id": None,
+    "current_lesson_ids_by_track": {},
     "last_opened_at": None,
     "completed_lessons": [],
 }
+
+
+def fresh_metadata_template() -> Dict[str, Any]:
+    """Return a fresh schema v2 metadata payload."""
+    return {
+        "schema_version": METADATA_SCHEMA_VERSION,
+        "current_lesson_id": None,
+        "current_lesson_ids_by_track": {},
+        "last_opened_at": None,
+        "completed_lessons": [],
+    }
 
 
 class LearningCatalogError(Exception):
@@ -306,6 +318,9 @@ def _load_track(track_dir: Path, lessons_dir: Path) -> Dict[str, Any]:
         "description": str(frontmatter.get("description") or "").strip(),
         "classification": classification,
         "classification_name": _humanize_slug(classification),
+        "roadmap": str(frontmatter.get("roadmap") or "uncategorized").strip()
+        or "uncategorized",
+        "roadmap_name": _humanize_slug(frontmatter.get("roadmap") or "uncategorized"),
         "track_tier": str(frontmatter.get("track_tier") or "").strip() or None,
         "target_lesson_count": target_lesson_count,
         "depends_on_tracks": _normalize_string_list(frontmatter.get("depends_on_tracks")),
@@ -448,7 +463,7 @@ def load_metadata() -> Dict[str, Any]:
     metadata_path = get_metadata_path()
 
     if not metadata_path.exists():
-        metadata = dict(METADATA_TEMPLATE_V2)
+        metadata = fresh_metadata_template()
         save_metadata(metadata)
         return metadata
 
@@ -465,7 +480,7 @@ def load_metadata() -> Dict[str, Any]:
         ) from exc
 
     if raw_metadata is None:
-        metadata = dict(METADATA_TEMPLATE_V2)
+        metadata = fresh_metadata_template()
         save_metadata(metadata)
         return metadata
 
@@ -480,7 +495,7 @@ def load_metadata() -> Dict[str, Any]:
     if "schema_version" not in raw_metadata:
         if raw_metadata:
             raise LearningMetadataError(_metadata_upgrade_message(metadata_path))
-        metadata = dict(METADATA_TEMPLATE_V2)
+        metadata = fresh_metadata_template()
         save_metadata(metadata)
         return metadata
 
@@ -511,6 +526,16 @@ def load_metadata() -> Dict[str, Any]:
             {"lesson_id": lesson_id, "completed_at": completed_at}
         )
 
+    current_by_track_raw = raw_metadata.get("current_lesson_ids_by_track") or {}
+    if not isinstance(current_by_track_raw, dict):
+        raise LearningMetadataError("current_lesson_ids_by_track must be a mapping.")
+
+    current_lesson_ids_by_track = {
+        str(track_id).strip(): str(lesson_id).strip()
+        for track_id, lesson_id in current_by_track_raw.items()
+        if str(track_id).strip() and str(lesson_id).strip()
+    }
+
     metadata = {
         "schema_version": METADATA_SCHEMA_VERSION,
         "current_lesson_id": (
@@ -518,6 +543,7 @@ def load_metadata() -> Dict[str, Any]:
             if raw_metadata.get("current_lesson_id") is not None
             else None
         ),
+        "current_lesson_ids_by_track": current_lesson_ids_by_track,
         "last_opened_at": (
             str(raw_metadata.get("last_opened_at")).strip()
             if raw_metadata.get("last_opened_at")
@@ -537,6 +563,7 @@ def save_metadata(metadata: Dict[str, Any]) -> None:
     payload = {
         "schema_version": METADATA_SCHEMA_VERSION,
         "current_lesson_id": metadata.get("current_lesson_id"),
+        "current_lesson_ids_by_track": metadata.get("current_lesson_ids_by_track", {}),
         "last_opened_at": metadata.get("last_opened_at"),
         "completed_lessons": metadata.get("completed_lessons", []),
     }
@@ -561,6 +588,18 @@ def get_completed_lesson_ids(metadata: Dict[str, Any]) -> set:
         str(item["lesson_id"])
         for item in metadata.get("completed_lessons", [])
         if item.get("lesson_id")
+    }
+
+
+def get_current_lesson_ids_by_track(metadata: Dict[str, Any]) -> Dict[str, str]:
+    """Return current lesson ids keyed by track id."""
+    raw_current = metadata.get("current_lesson_ids_by_track") or {}
+    if not isinstance(raw_current, dict):
+        return {}
+    return {
+        str(track_id).strip(): str(lesson_id).strip()
+        for track_id, lesson_id in raw_current.items()
+        if str(track_id).strip() and str(lesson_id).strip()
     }
 
 
@@ -591,9 +630,16 @@ def attach_progress(
         catalog["tracks"], completed_lesson_ids
     )
     current_lesson_id = metadata.get("current_lesson_id")
+    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    current_lesson_ids = set(current_lesson_ids_by_track.values())
+    if current_lesson_id:
+        current_lesson_ids.add(str(current_lesson_id))
 
     for lesson in catalog["lessons"]:
-        if lesson["lesson_id"] == current_lesson_id:
+        if (
+            lesson["lesson_id"] in current_lesson_ids
+            and lesson["lesson_id"] not in completed_lesson_ids
+        ):
             lesson["progress_status"] = "current"
         elif lesson["lesson_id"] in completed_lesson_ids:
             lesson["progress_status"] = "done"
@@ -606,11 +652,22 @@ def attach_progress(
             for lesson in track["lessons"]
             if lesson["lesson_id"] in completed_lesson_ids
         )
+        track_current_lesson_id = current_lesson_ids_by_track.get(track["track_id"])
+        if not track_current_lesson_id:
+            track_current_lesson_id = next(
+                (
+                    lesson["lesson_id"]
+                    for lesson in track["lessons"]
+                    if lesson["lesson_id"] == current_lesson_id
+                ),
+                None,
+            )
         current_in_track = next(
             (
                 lesson
                 for lesson in track["lessons"]
-                if lesson["lesson_id"] == current_lesson_id
+                if lesson["lesson_id"] == track_current_lesson_id
+                and lesson["lesson_id"] not in completed_lesson_ids
             ),
             None,
         )

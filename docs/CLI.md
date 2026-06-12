@@ -562,8 +562,8 @@ content by `classification`, so the default navigation is
 #### `mystuff learn`
 
 Show a compact summary of the current learning state: visible tracks, open
-tracks, available tracks, locked tracks, completed lessons, and the current
-lesson.
+tracks, available tracks, locked tracks, completed lessons, and current
+lessons.
 
 ```bash
 mystuff learn
@@ -572,11 +572,20 @@ mystuff learn
 #### `mystuff learn track`
 
 Inspect one track. Without a track id, it opens an interactive selector for
-active, unlocked, unfinished tracks.
+published tracks.
 
 ```bash
 mystuff learn track [TRACK_ID]
 ```
+
+Track lesson output is plain text without a header:
+`status seq lesson`.
+
+**Options:**
+
+- `--list`: Print published tracks as plain text
+- `--include-private`: Include private lessons
+- `--selector, --prompt`: Use the full-screen native selector, or the compact numbered search prompt
 
 #### `mystuff learn list`
 
@@ -599,12 +608,17 @@ mystuff learn list [OPTIONS]
 
 #### `mystuff learn start`
 
-Start or resume a track, lesson path, or lesson id. Without a reference, it
-opens an interactive selector for tracks you have not started yet.
+Start or resume a published track, lesson path, or lesson id. Without a
+reference, it opens an interactive selector for published tracks you have not
+started yet.
 
 ```bash
 mystuff learn start [OPTIONS] [LESSON]
 ```
+
+**Options:**
+
+- `--selector, --prompt`: Use the full-screen native selector, or the compact numbered search prompt
 
 **Examples:**
 
@@ -615,7 +629,7 @@ mystuff learn start 438
 ```
 
 When you pass a track id, `mystuff learn start` resumes that track from the
-first pending lesson.
+first pending published lesson. Unpublished tracks and lessons are rejected.
 
 #### `mystuff learn current`
 
@@ -626,6 +640,11 @@ it opens an interactive selector for active lessons.
 mystuff learn current [REFERENCE] [--web]
 ```
 
+**Options:**
+
+- `--web`: Open the lesson in the generated website
+- `--selector, --prompt`: Use the full-screen native selector, or the compact numbered search prompt
+
 #### `mystuff learn next`
 
 Complete an active lesson and move to the next pending lesson in the same track.
@@ -634,6 +653,11 @@ Without a reference, it opens an interactive selector for active lessons.
 ```bash
 mystuff learn next [REFERENCE] [--web]
 ```
+
+**Options:**
+
+- `--web`: Open the next lesson in the generated website
+- `--selector, --prompt`: Use the full-screen native selector, or the compact numbered search prompt
 
 #### `mystuff learn stats`
 
@@ -732,9 +756,13 @@ generate:
 
 ---
 
-## Interactive Features (fzf)
+## Interactive Features
 
-Many commands support interactive selection when `fzf` is installed:
+Learning commands use a built-in fuzzy selector. Use `--prompt` on `learn`
+selection commands to switch to the compact numbered search prompt: type a
+search term to filter, then choose a visible number.
+
+Other commands support interactive selection when `fzf` is installed:
 
 - **List browsing**: Use `--interactive` flag with list commands
 - **Smart selection**: Edit/delete commands use fzf when IDs not provided

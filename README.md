@@ -32,7 +32,7 @@ mystuff link search python    # locate saved links
 - **Editor integration** – honours `$EDITOR` and `$PAGER`.
 - **Web viewer** – open lessons as beautifully styled HTML in your browser.
 - **Static site generator** – create elegant portfolio websites from your data.
-- **fzf support** – interactive selection where available.
+- **Interactive selectors** – built-in fuzzy learning selectors, plus optional `fzf` pickers where available.
 - **Full‑text search** – across every module.
 - **GitHub stars importer** – capture starred repositories as bookmarks.
 - **Configurable sync** – run user‑defined shell commands for backup or deployment.
@@ -55,7 +55,7 @@ pip install -e .
 
 | Tool      | Purpose                                 |
 | --------- | --------------------------------------- |
-| `fzf`     | Interactive pickers for list/edit tasks |
+| `fzf`     | Optional interactive pickers for non-learning list/edit tasks |
 | `ripgrep` | Faster recursive search (auto‑detected) |
 
 ## Directory structure
@@ -98,6 +98,7 @@ mystuff learn list
 # Select or inspect an active track
 mystuff learn track
 mystuff learn track foundations
+mystuff learn track --list
 
 # Inspect lessons inside a track
 mystuff learn list --track foundations
@@ -124,13 +125,15 @@ mystuff learn stats
 
 Important behavior:
 
-- `mystuff learn` shows a compact status summary with open tracks and the current lesson.
-- `mystuff learn track` opens an interactive selector for active tracks when no track id is passed.
-- `mystuff learn start` opens an interactive selector for tracks you have not started yet.
+- `mystuff learn` shows a compact status summary with open tracks and current lessons.
+- `mystuff learn track` opens an interactive selector for published tracks when no track id is passed.
+- `mystuff learn track --list` prints published tracks as plain text.
+- `mystuff learn start` opens an interactive selector for published tracks you have not started yet.
 - `mystuff learn current` and `mystuff learn next` select from active lessons when no reference is passed.
-- `mystuff learn start <track_id>` resumes the first pending lesson in that track.
+- Learning selectors are built in: use `--prompt` to filter with text and choose by visible number instead of the full-screen selector.
+- `mystuff learn start <track_id>` resumes the first pending published lesson in that track.
 - `mystuff learn next` never jumps across tracks; when a track ends it suggests newly unlocked tracks.
-- Progress is stored in `learning/metadata.yaml` with `schema_version: 2`, `current_lesson_id`, and `completed_lessons` keyed by `lesson_id`.
+- Progress is stored in `learning/metadata.yaml` with `schema_version: 2`, `current_lesson_id`, `current_lesson_ids_by_track`, and `completed_lessons` keyed by `lesson_id`.
 - `mystuff learn current --web` opens the published lesson URL from `config.yaml` under `generate.web.url`.
 
 ## Static Website Generation

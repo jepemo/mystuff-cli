@@ -1,19 +1,19 @@
 {% extends "base.html" %}
 
-{% block page_title %}{{ classification.classification_name }} - @{{ author }}{% endblock %}
-{% block main_class %}classification-page{% endblock %}
+{% block page_title %}{{ roadmap.roadmap_name }} - @{{ author }}{% endblock %}
+{% block main_class %}roadmap-page{% endblock %}
 
 {% block content %}
-<h1>{{ classification.classification_name }}</h1>
+<h1>{{ roadmap.roadmap_name }}</h1>
 
 <section class="stack-block">
   <p class="breadcrumb">
-    <a href="{{ relative_root }}learning.html">Learning</a>
+    <a href="{{ relative_root }}learning.html#roadmaps">Roadmaps</a>
     /
-    {{ classification.classification_name }}
+    {{ roadmap.roadmap_name }}
   </p>
-  <p class="page-kicker">CLASSIFICATION</p>
-  <p>{{ classification.track_count }} tracks / {{ classification.lesson_count }} lessons</p>
+  <p class="page-kicker">ROADMAP</p>
+  <p>{{ roadmap.track_count }} tracks / {{ roadmap.lesson_count }} lessons</p>
 </section>
 
 <section class="stack-block">
