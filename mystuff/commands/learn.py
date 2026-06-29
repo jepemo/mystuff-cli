@@ -24,7 +24,9 @@ from mystuff.learning_catalog import (
     LearningReferenceError,
     attach_progress,
     fresh_metadata_template,
-    get_all_lessons as catalog_get_all_lessons,
+)
+from mystuff.learning_catalog import get_all_lessons as catalog_get_all_lessons
+from mystuff.learning_catalog import (
     get_completed_lesson_ids,
     get_current_lesson,
     get_current_lesson_ids_by_track,
@@ -32,7 +34,9 @@ from mystuff.learning_catalog import (
     get_lessons_dir,
     get_metadata_path,
     get_mystuff_dir,
-    get_next_lesson as catalog_get_next_lesson,
+)
+from mystuff.learning_catalog import get_next_lesson as catalog_get_next_lesson
+from mystuff.learning_catalog import (
     is_track_completed,
     load_learning_catalog,
     load_metadata,
@@ -41,6 +45,7 @@ from mystuff.learning_catalog import (
     save_metadata,
     track_status_summary,
 )
+from mystuff.markdown_utils import normalize_lesson_markdown
 
 learn_app = typer.Typer(help="Manage learning tracks and progress")
 
@@ -87,7 +92,7 @@ def get_css_theme(theme: str = "default") -> str:
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', sans-serif;  /* noqa: E501 */
             line-height: 1.7;
@@ -98,7 +103,7 @@ def get_css_theme(theme: str = "default") -> str:
             background: linear-gradient(to bottom, #ffffff 0%, #f6f8fa 100%);
             min-height: 100vh;
         }
-        
+
         h1, h2, h3, h4, h5, h6 {
             margin-top: 2rem;
             margin-bottom: 1rem;
@@ -107,7 +112,7 @@ def get_css_theme(theme: str = "default") -> str:
             color: #1a1a1a;
             letter-spacing: -0.02em;
         }
-        
+
         h1 {
             font-size: 2.5em;
             border-bottom: 3px solid #0969da;
@@ -118,21 +123,21 @@ def get_css_theme(theme: str = "default") -> str:
             -webkit-text-fill-color: transparent;
             background-clip: text;
         }
-        
+
         h2 {
             font-size: 1.8em;
             border-bottom: 2px solid #d0d7de;
             padding-bottom: 0.4em;
             color: #0969da;
         }
-        
+
         h3 { font-size: 1.4em; color: #2da44e; }
         h4 { font-size: 1.2em; }
         h5 { font-size: 1.1em; }
         h6 { font-size: 1em; color: #656d76; }
-        
+
         p { margin: 1em 0; }
-        
+
         code {
             background: linear-gradient(135deg, #f6f8fa 0%, #eef1f5 100%);
             border: 1px solid #d0d7de;
@@ -143,7 +148,7 @@ def get_css_theme(theme: str = "default") -> str:
             color: #cf222e;
             box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
         }
-        
+
         pre {
             background: linear-gradient(135deg, #161b22 0%, #0d1117 100%);
             border: 1px solid #30363d;
@@ -154,7 +159,7 @@ def get_css_theme(theme: str = "default") -> str:
             margin: 1.5em 0;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
-        
+
         pre code {
             background: transparent;
             border: none;
@@ -163,7 +168,7 @@ def get_css_theme(theme: str = "default") -> str:
             color: #c9d1d9;
             box-shadow: none;
         }
-        
+
         blockquote {
             border-left: 4px solid #0969da;
             padding: 0.5em 1.5em;
@@ -174,16 +179,16 @@ def get_css_theme(theme: str = "default") -> str:
             font-style: italic;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
         }
-        
+
         a {
             color: #0969da;
             text-decoration: none;
             border-bottom: 1px solid transparent;
             transition: all 0.2s ease;
         }
-        
+
         a:hover { color: #1f6feb; border-bottom-color: #1f6feb; }
-        
+
         table {
             border-collapse: collapse;
             width: 100%;
@@ -192,7 +197,7 @@ def get_css_theme(theme: str = "default") -> str:
             border-radius: 8px;
             overflow: hidden;
         }
-        
+
         table th {
             background: linear-gradient(135deg, #0969da 0%, #1f6feb 100%);
             color: white;
@@ -200,28 +205,28 @@ def get_css_theme(theme: str = "default") -> str:
             padding: 12px 16px;
             text-align: left;
         }
-        
+
         table td {
             border: 1px solid #d0d7de;
             padding: 12px 16px;
             transition: background-color 0.2s ease;
         }
-        
+
         table tr:hover td { background-color: #f6f8fa; }
         table tr:nth-child(even) { background-color: #f9fafb; }
-        
+
         ul, ol { padding-left: 2em; margin: 1em 0; }
         li { margin: 0.5em 0; padding-left: 0.5em; }
         ul li::marker { color: #0969da; font-weight: bold; }
         ol li::marker { color: #2da44e; font-weight: bold; }
-        
+
         hr {
             border: 0;
             height: 2px;
             background: linear-gradient(to right, transparent, #d0d7de, transparent);
             margin: 3em 0;
         }
-        
+
         @media (prefers-color-scheme: dark) {
             body {
                 background: linear-gradient(to bottom, #0d1117 0%, #010409 100%);
@@ -261,20 +266,20 @@ def get_css_theme(theme: str = "default") -> str:
             color: #2c3e50;
             background: #ffffff;
         }
-        
+
         h1, h2, h3, h4, h5, h6 {
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             margin: 2em 0 0.5em 0;
             font-weight: 400;
             color: #1a1a1a;
         }
-        
+
         h1 { font-size: 2.2em; font-weight: 300; }
         h2 { font-size: 1.6em; margin-top: 1.5em; }
         h3 { font-size: 1.3em; }
-        
+
         p { margin: 1.2em 0; }
-        
+
         code {
             background: #f5f5f5;
             padding: 0.2em 0.4em;
@@ -283,7 +288,7 @@ def get_css_theme(theme: str = "default") -> str:
             color: #2c3e50;
             border-radius: 3px;
         }
-        
+
         pre {
             background: #2c3e50;
             color: #ecf0f1;
@@ -292,9 +297,9 @@ def get_css_theme(theme: str = "default") -> str:
             overflow-x: auto;
             margin: 2em 0;
         }
-        
+
         pre code { background: transparent; padding: 0; color: #ecf0f1; }
-        
+
         blockquote {
             border-left: 3px solid #bdc3c7;
             padding-left: 1.5em;
@@ -302,29 +307,29 @@ def get_css_theme(theme: str = "default") -> str:
             margin: 2em 0;
             font-style: italic;
         }
-        
+
         a { color: #3498db; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        
+
         table {
             border-collapse: collapse;
             width: 100%;
             margin: 2em 0;
         }
-        
+
         table th, table td {
             border: 1px solid #ecf0f1;
             padding: 0.8em;
             text-align: left;
         }
-        
+
         table th { background: #ecf0f1; font-weight: 600; }
-        
+
         ul, ol { margin: 1.2em 0; padding-left: 2em; }
         li { margin: 0.5em 0; }
-        
+
         hr { border: 0; border-top: 1px solid #ecf0f1; margin: 3em 0; }
-        
+
         @media (prefers-color-scheme: dark) {
             body { background: #1a1a1a; color: #e0e0e0; }
             h1, h2, h3 { color: #ffffff; }
@@ -345,18 +350,18 @@ def get_css_theme(theme: str = "default") -> str:
             color: #24292f;
             background-color: #ffffff;
         }
-        
+
         h1, h2, h3, h4, h5, h6 {
             margin-top: 24px;
             margin-bottom: 16px;
             font-weight: 600;
             line-height: 1.25;
         }
-        
+
         h1 { font-size: 2em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
         h2 { font-size: 1.5em; border-bottom: 1px solid #d0d7de; padding-bottom: 0.3em; }
         h3 { font-size: 1.25em; }
-        
+
         code {
             background-color: #f6f8fa;
             border-radius: 6px;
@@ -364,43 +369,43 @@ def get_css_theme(theme: str = "default") -> str:
             font-family: 'Courier New', Courier, monospace;
             font-size: 85%;
         }
-        
+
         pre {
             background-color: #f6f8fa;
             border-radius: 6px;
             padding: 16px;
             overflow: auto;
         }
-        
+
         pre code { background-color: transparent; padding: 0; }
-        
+
         blockquote {
             border-left: 4px solid #d0d7de;
             padding-left: 1em;
             color: #656d76;
             margin: 1em 0;
         }
-        
+
         a { color: #0969da; text-decoration: none; }
         a:hover { text-decoration: underline; }
-        
+
         table {
             border-collapse: collapse;
             width: 100%;
             margin: 16px 0;
         }
-        
+
         table th, table td {
             border: 1px solid #d0d7de;
             padding: 6px 13px;
         }
-        
+
         table tr:nth-child(2n) { background-color: #f6f8fa; }
-        
+
         ul, ol { padding-left: 2em; }
         li { margin: 0.25em 0; }
         hr { border: 0; border-top: 1px solid #d0d7de; margin: 24px 0; }
-        
+
         @media (prefers-color-scheme: dark) {
             body { background-color: #0d1117; color: #c9d1d9; }
             h1, h2 { border-bottom-color: #21262d; }
@@ -423,30 +428,30 @@ def get_css_theme(theme: str = "default") -> str:
             background: #0d1117;
             min-height: 100vh;
         }
-        
+
         h1, h2, h3, h4, h5, h6 {
             margin-top: 2rem;
             margin-bottom: 1rem;
             font-weight: 700;
             color: #ffffff;
         }
-        
+
         h1 {
             font-size: 2.5em;
             border-bottom: 3px solid #1f6feb;
             padding-bottom: 0.5em;
             color: #58a6ff;
         }
-        
+
         h2 {
             font-size: 1.8em;
             border-bottom: 2px solid #30363d;
             padding-bottom: 0.4em;
             color: #58a6ff;
         }
-        
+
         h3 { font-size: 1.4em; color: #3fb950; }
-        
+
         code {
             background: #161b22;
             border: 1px solid #30363d;
@@ -456,7 +461,7 @@ def get_css_theme(theme: str = "default") -> str:
             font-size: 0.9em;
             color: #ff7b72;
         }
-        
+
         pre {
             background: #161b22;
             border: 1px solid #30363d;
@@ -465,14 +470,14 @@ def get_css_theme(theme: str = "default") -> str:
             overflow-x: auto;
             margin: 1.5em 0;
         }
-        
+
         pre code {
             background: transparent;
             border: none;
             padding: 0;
             color: #c9d1d9;
         }
-        
+
         blockquote {
             border-left: 4px solid #1f6feb;
             padding: 0.5em 1.5em;
@@ -481,10 +486,10 @@ def get_css_theme(theme: str = "default") -> str:
             background: #161b22;
             border-radius: 0 6px 6px 0;
         }
-        
+
         a { color: #58a6ff; text-decoration: none; transition: color 0.2s; }
         a:hover { color: #79c0ff; }
-        
+
         table {
             border-collapse: collapse;
             width: 100%;
@@ -492,7 +497,7 @@ def get_css_theme(theme: str = "default") -> str:
             border-radius: 8px;
             overflow: hidden;
         }
-        
+
         table th {
             background: #1f6feb;
             color: white;
@@ -500,20 +505,20 @@ def get_css_theme(theme: str = "default") -> str:
             padding: 12px 16px;
             text-align: left;
         }
-        
+
         table td {
             border: 1px solid #30363d;
             padding: 12px 16px;
         }
-        
+
         table tr:nth-child(even) { background-color: #161b22; }
         table tr:hover td { background-color: #21262d; }
-        
+
         ul, ol { padding-left: 2em; margin: 1em 0; }
         li { margin: 0.5em 0; }
         ul li::marker { color: #58a6ff; }
         ol li::marker { color: #3fb950; }
-        
+
         hr {
             border: 0;
             height: 2px;
@@ -531,24 +536,24 @@ def get_css_theme(theme: str = "default") -> str:
             color: #37352f;
             background: #ffffff;
         }
-        
+
         h1, h2, h3 {
             margin: 2em 0 0.5em 0;
             font-weight: 700;
             color: #37352f;
         }
-        
+
         h1 {
             font-size: 2.5em;
             margin-top: 0;
             padding-bottom: 0.4em;
         }
-        
+
         h2 { font-size: 1.8em; }
         h3 { font-size: 1.3em; }
-        
+
         p { margin: 1em 0; color: #37352f; }
-        
+
         code {
             background: #f7f6f3;
             color: #eb5757;
@@ -557,7 +562,7 @@ def get_css_theme(theme: str = "default") -> str:
             font-family: 'SF Mono', Monaco, 'Cascadia Code', monospace;
             font-size: 0.9em;
         }
-        
+
         pre {
             background: #2f3437;
             color: #ffffff;
@@ -566,13 +571,13 @@ def get_css_theme(theme: str = "default") -> str:
             overflow-x: auto;
             margin: 1.5em 0;
         }
-        
+
         pre code {
             background: transparent;
             color: #ffffff;
             padding: 0;
         }
-        
+
         blockquote {
             border-left: 3px solid #37352f;
             padding-left: 1.2em;
@@ -580,43 +585,43 @@ def get_css_theme(theme: str = "default") -> str:
             margin: 1.5em 0;
             font-size: 1em;
         }
-        
+
         a {
             color: #37352f;
             text-decoration: underline;
             text-decoration-color: rgba(55, 53, 47, 0.4);
             transition: all 0.2s;
         }
-        
+
         a:hover { text-decoration-color: rgba(55, 53, 47, 1); }
-        
+
         table {
             border-collapse: collapse;
             width: 100%;
             margin: 2em 0;
         }
-        
+
         table th, table td {
             border: 1px solid #e9e9e7;
             padding: 8px 12px;
             text-align: left;
         }
-        
+
         table th {
             background: #f7f6f3;
             font-weight: 600;
             color: #37352f;
         }
-        
+
         ul, ol { margin: 0.5em 0; padding-left: 1.8em; }
         li { margin: 0.3em 0; }
-        
+
         hr {
             border: 0;
             border-top: 1px solid #e9e9e7;
             margin: 2em 0;
         }
-        
+
         @media (prefers-color-scheme: dark) {
             body { background: #191919; color: #e6e6e6; }
             h1, h2, h3 { color: #e6e6e6; }
@@ -649,7 +654,7 @@ def convert_markdown_to_html(markdown_path: Path, theme: str = "default") -> str
 
     # Convert markdown to HTML
     md = markdown.Markdown(extensions=["fenced_code", "tables", "codehilite"])
-    html_content = md.convert(md_content)
+    html_content = md.convert(normalize_lesson_markdown(md_content))
 
     # Get CSS for selected theme
     css_content = get_css_theme(theme)
@@ -836,9 +841,7 @@ def _is_startable_track(track: Dict[str, Any]) -> bool:
     )
 
 
-def _ensure_track_is_startable(
-    track: Dict[str, Any], catalog: Dict[str, Any]
-) -> None:
+def _ensure_track_is_startable(track: Dict[str, Any], catalog: Dict[str, Any]) -> None:
     if track.get("status") != "active":
         raise LearningReferenceError(f"Track '{track['track_id']}' is not active.")
     if not track.get("public", True):
@@ -1078,11 +1081,7 @@ def _lesson_selection_label(lesson: Dict[str, Any]) -> str:
 
 
 def _published_track_candidates(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return [
-        track
-        for track in catalog["tracks"]
-        if track.get("is_publicly_visible")
-    ]
+    return [track for track in catalog["tracks"] if track.get("is_publicly_visible")]
 
 
 def _plain_track_label(track: Dict[str, Any]) -> str:
@@ -1090,6 +1089,7 @@ def _plain_track_label(track: Dict[str, Any]) -> str:
 
 
 def _unstarted_track_candidates(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Return public, unlocked tracks that have not been started yet."""
     return [
         track
         for track in catalog["tracks"]

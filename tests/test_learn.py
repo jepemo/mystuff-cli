@@ -20,8 +20,11 @@ from mystuff.commands.learn import (
     load_metadata,
     save_metadata,
 )
-from mystuff.learning_catalog import LearningMetadataError
-from mystuff.learning_catalog import LearningCatalogError, load_learning_catalog
+from mystuff.learning_catalog import (
+    LearningCatalogError,
+    LearningMetadataError,
+    load_learning_catalog,
+)
 
 
 def write_markdown_with_frontmatter(path: Path, frontmatter: dict, body: str) -> None:
@@ -414,7 +417,6 @@ def test_start_without_argument_selects_unstarted_track(temp_learning_dir):
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
 
-
 def test_track_without_argument_selects_active_track(temp_learning_dir):
     runner = CliRunner()
 
@@ -677,6 +679,29 @@ def test_convert_markdown_to_html(temp_learning_dir):
     html_content = Path(html_path).read_text(encoding="utf-8")
     assert "<!DOCTYPE html>" in html_content
     assert "<code>" in html_content
+    Path(html_path).unlink()
+
+
+def test_convert_markdown_to_html_renders_generated_quote_list(temp_learning_dir):
+    lessons_dir = temp_learning_dir / "lessons" / "scratch"
+    lessons_dir.mkdir()
+    lesson_file = lessons_dir / "quote-list.md"
+    lesson_file.write_text(
+        "> **By the end of this lesson, you will be able to:**\n"
+        "> - identify the participants;\n"
+        "> - explain the promise.\n\n"
+        "> **Idea in one sentence:** Components coordinate through messages.\n",
+        encoding="utf-8",
+    )
+
+    html_path = convert_markdown_to_html(lesson_file)
+    html_content = Path(html_path).read_text(encoding="utf-8")
+
+    assert "<blockquote>" in html_content
+    assert "<ul>" in html_content
+    assert "<li>" in html_content
+    assert "identify the participants;" in html_content
+    assert "explain the promise." in html_content
     Path(html_path).unlink()
 
 

@@ -5,7 +5,6 @@ Creates the basic directory structure for mystuff data
 
 import os
 from pathlib import Path
-
 from typing import Annotated
 
 import typer

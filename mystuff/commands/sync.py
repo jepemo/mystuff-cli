@@ -14,13 +14,13 @@ sync_app = typer.Typer(help="Execute custom sync commands from configuration")
 
 def get_mystuff_dir() -> Optional[Path]:
     """Get the mystuff directory by looking for config.yaml.
-    
+
     Priority:
     1. Check MYSTUFF_HOME environment variable first
     2. Fall back to searching in current directory and parent directories
     """
     import os
-    
+
     # Check MYSTUFF_HOME environment variable first
     mystuff_home = os.getenv("MYSTUFF_HOME")
     if mystuff_home:
@@ -28,7 +28,7 @@ def get_mystuff_dir() -> Optional[Path]:
         config_file = mystuff_path / "config.yaml"
         if config_file.exists():
             return mystuff_path
-    
+
     # Fall back to looking for config.yaml in current directory and parent directories
     current = Path.cwd()
 
@@ -70,7 +70,7 @@ def load_config(mystuff_dir: Path) -> Dict[str, Any]:
 def load_sync_config(mystuff_dir: Path) -> Dict[str, Any]:
     """Load sync configuration from config.yaml."""
     config = load_config(mystuff_dir)
-    
+
     # Get sync configuration
     sync_config = config.get("sync", {})
     if not sync_config:
@@ -89,7 +89,7 @@ def execute_sync_commands(
     continue_on_error: bool = False,
 ) -> bool:
     """Execute a list of sync commands in a single shared shell session.
-    
+
     This allows commands to share state (environment variables, working directory, etc.)
     so that operations like 'cd' persist across multiple commands.
     """
@@ -99,8 +99,9 @@ def execute_sync_commands(
 
     # Prepare environment variables
     import os
+
     env = os.environ.copy()
-    
+
     # Set MYSTUFF_HOME if not already set
     if "MYSTUFF_HOME" not in env:
         data_directory = config.get("data_directory")
@@ -125,7 +126,7 @@ def execute_sync_commands(
         # Build a single shell script that executes all commands
         # This preserves state (working directory, variables, etc.) across commands
         shell_script = "set -e\n"  # Exit on first error by default
-        
+
         if continue_on_error:
             # When continuing on error, we still need to track if any command failed
             # Use || to continue, and track exit status with a variable
@@ -138,7 +139,7 @@ _sync_failed=0
         else:
             # Use set -e to stop on first error
             shell_script += "\n".join(commands)
-        
+
         # Execute all commands in a single shell session
         result = subprocess.run(
             shell_script,
@@ -152,11 +153,15 @@ _sync_failed=0
 
         if result.returncode != 0:
             if not verbose:
-                typer.echo(f"❌ Sync commands failed (exit code {result.returncode})", err=True)
+                typer.echo(
+                    f"❌ Sync commands failed (exit code {result.returncode})", err=True
+                )
                 if result.stderr:
                     typer.echo(f"Error output:\n{result.stderr.strip()}", err=True)
             else:
-                typer.echo(f"❌ Sync commands failed (exit code {result.returncode})", err=True)
+                typer.echo(
+                    f"❌ Sync commands failed (exit code {result.returncode})", err=True
+                )
             return False
         else:
             if not verbose:
@@ -202,7 +207,7 @@ def run(
     # Load complete configuration
     config = load_config(mystuff_dir)
     sync_config = config.get("sync", {})
-    
+
     if not sync_config:
         typer.echo("❌ No 'sync' section found in config.yaml", err=True)
         raise typer.Exit(1)

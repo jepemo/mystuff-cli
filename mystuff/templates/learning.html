@@ -31,17 +31,33 @@
     {% endif %}
   </div>
 
-{% if learning %}
+{% set learning_items = active_learning if active_learning is defined else [] %}
+{% if learning_items %}
 <section class="stack-block learning-hero">
   <h2>Current Learning</h2>
-  <p class="home-learning-main">
-    <a href="{{ learning.classification_url }}">{{ learning.classification_name }}</a>
-    /
-    <a href="{{ learning.track_url }}">{{ learning.track_name }}</a>
-    /
-    <a href="{{ learning.lesson_url }}">{{ learning.lesson_title }}</a>
-  </p>
-  <p><a class="cta-link" href="{{ learning.lesson_url }}">Open current lesson</a></p>
+  {% if learning_items|length == 1 %}
+  {% set item = learning_items[0] %}
+  <article class="current-learning-card">
+    <h3>{% if item.track_url %}<a href="{{ item.track_url }}">{{ item.track_name }}</a>{% else %}{{ item.track_name }}{% endif %}</h3>
+    <p class="current-learning-lesson">
+      {% if item.lesson_url %}<a href="{{ item.lesson_url }}">{{ item.lesson_title }}</a>{% else %}{{ item.lesson_title }}{% endif %}
+    </p>
+    {% if item.track_description %}
+    <p class="current-learning-description">{{ item.track_description }}</p>
+    {% endif %}
+    {% if item.lesson_url %}<p><a class="cta-link" href="{{ item.lesson_url }}">Open current lesson</a></p>{% endif %}
+  </article>
+  {% else %}
+  <ul class="current-learning-list current-learning-list-compact">
+    {% for item in learning_items %}
+    <li>
+      <strong>{% if item.track_url %}<a href="{{ item.track_url }}">{{ item.track_name }}</a>{% else %}{{ item.track_name }}{% endif %}</strong>
+      <span>{% if item.lesson_url %}<a href="{{ item.lesson_url }}">{{ item.lesson_title }}</a>{% else %}{{ item.lesson_title }}{% endif %}</span>
+      {% if item.track_description %}<span class="current-learning-description">{{ item.track_description }}</span>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
 </section>
 {% endif %}
 
@@ -53,7 +69,6 @@
     <article class="classification-card">
       <p class="status-badge">[{{ classification.track_count }} TRACKS]</p>
       <h2><a href="{{ classification.url }}">{{ classification.classification_name }}</a></h2>
-      <p>{{ classification.lesson_count }} lessons across this classification.</p>
       <p><a class="cta-link" href="{{ classification.url }}">Browse tracks</a></p>
     </article>
     {% endfor %}
@@ -86,7 +101,6 @@
     <article class="classification-card">
       <p class="status-badge">[{{ roadmap.track_count }} TRACKS]</p>
       <h2><a href="{{ roadmap.url }}">{{ roadmap.roadmap_name }}</a></h2>
-      <p>{{ roadmap.lesson_count }} lessons across this roadmap.</p>
       <p><a class="cta-link" href="{{ roadmap.url }}">Browse tracks</a></p>
     </article>
     {% endfor %}

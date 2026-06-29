@@ -9,7 +9,7 @@
     <script src="{{ relative_root|default('') }}js/site.js" defer></script>
     {% block head_extra %}{% endblock %}
   </head>
-  <body>
+  <body{% block body_attributes %}{% endblock %}>
     <header class="site-header">
       <div class="site-topline">
         <a class="site-title" href="{{ relative_root|default('') }}index.html">@{{ author }}</a>

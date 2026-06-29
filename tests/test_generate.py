@@ -13,9 +13,9 @@ from mystuff.commands.generate import (
     extract_lesson_title,
     generate_lesson_pages,
     generate_static_web,
+    get_generate_config,
     group_tracks_by_classification,
     group_tracks_by_roadmap,
-    get_generate_config,
     load_active_learning_data,
     load_all_lessons_with_status,
     load_all_tracks_with_status,
@@ -256,9 +256,7 @@ def test_copy_static_files_creates_structure(temp_output_dir, monkeypatch):
     def mock_get_static_dir():
         return Path("/nonexistent/path")
 
-    monkeypatch.setattr(
-        "mystuff.commands.generate.get_static_dir", mock_get_static_dir
-    )
+    monkeypatch.setattr("mystuff.commands.generate.get_static_dir", mock_get_static_dir)
 
     copy_static_files(temp_output_dir)
     assert (temp_output_dir / "css").exists()
@@ -279,7 +277,10 @@ def test_render_template_basic(temp_output_dir, tmp_path, monkeypatch):
     temp_output_dir.mkdir(parents=True, exist_ok=True)
     render_template("test.html", {"title": "Hello"}, output_path)
 
-    assert output_path.read_text(encoding="utf-8") == "<html><body><h1>Hello</h1></body></html>"
+    assert (
+        output_path.read_text(encoding="utf-8")
+        == "<html><body><h1>Hello</h1></body></html>"
+    )
 
 
 def test_load_learning_data_returns_current_public_lesson(
@@ -328,7 +329,9 @@ def test_load_active_learning_data_returns_open_public_lessons(
             "schema_version": 2,
             "current_lesson_id": None,
             "last_opened_at": None,
-            "completed_lessons": [{"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}],
+            "completed_lessons": [
+                {"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}
+            ],
         }
     )
 
@@ -336,6 +339,7 @@ def test_load_active_learning_data_returns_open_public_lessons(
 
     assert len(result) == 1
     assert result[0]["track_name"] == "Foundations"
+    assert result[0]["track_description"] == "Core concepts."
     assert result[0]["lesson_title"] == "Capstone Foundations"
     assert result[0]["lesson_url"] == "lessons/foundations/002.html"
     assert result[0]["is_current"] is False
@@ -363,6 +367,27 @@ def test_load_active_learning_data_returns_started_tracks_without_completions(
         ("foundations", "100"),
         ("systems", "200"),
     ]
+
+
+def test_load_active_learning_data_uses_track_cursor_over_legacy_global_cursor(
+    sample_learning, sample_config
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "100",
+            "current_lesson_ids_by_track": {"foundations": "101"},
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    result = load_active_learning_data()
+
+    assert [
+        (item["track_id"], item["current_lesson_id"], item["is_current"])
+        for item in result
+    ] == [("foundations", "101", True)]
 
 
 def test_load_active_learning_data_includes_unpublished_started_track(
@@ -402,7 +427,9 @@ def test_load_all_tracks_with_status_includes_unpublished_tracks_without_links(
             "schema_version": 2,
             "current_lesson_id": "101",
             "last_opened_at": None,
-            "completed_lessons": [{"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}],
+            "completed_lessons": [
+                {"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}
+            ],
         }
     )
 
@@ -430,7 +457,9 @@ def test_load_all_lessons_with_status_flattens_public_catalog(
             "schema_version": 2,
             "current_lesson_id": "200",
             "last_opened_at": None,
-            "completed_lessons": [{"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}],
+            "completed_lessons": [
+                {"lesson_id": "100", "completed_at": "2026-04-01T10:00:00"}
+            ],
         }
     )
 
@@ -499,6 +528,17 @@ def test_learning_template_includes_switchable_tracks_view(
     tracks = load_all_tracks_with_status()
     classifications = group_tracks_by_classification(tracks)
     roadmaps = group_tracks_by_roadmap(tracks)
+    active_learning = [
+        {
+            "track_name": "Foundations",
+            "track_description": "Core concepts.",
+            "track_url": "tracks/foundations.html",
+            "lesson_title": "Capstone Foundations",
+            "lesson_url": "lessons/foundations/002.html",
+            "classification_name": "Systems Thinking",
+            "classification_url": "classifications/systems-thinking.html",
+        }
+    ]
     temp_output_dir.mkdir(parents=True, exist_ok=True)
 
     render_template(
@@ -509,6 +549,7 @@ def test_learning_template_includes_switchable_tracks_view(
             "author": "Test Author",
             "menu_items": [],
             "learning": None,
+            "active_learning": active_learning,
             "tracks": tracks,
             "classifications": classifications,
             "roadmaps": roadmaps,
@@ -524,6 +565,15 @@ def test_learning_template_includes_switchable_tracks_view(
     assert 'data-learning-view="tracks"' in html_content
     assert 'data-learning-view-button="roadmaps"' in html_content
     assert 'data-learning-view="roadmaps"' in html_content
+    assert 'class="current-learning-card"' in html_content
+    assert 'href="tracks/foundations.html">Foundations' in html_content
+    assert 'href="lessons/foundations/002.html">Capstone Foundations' in html_content
+    assert "Open current lesson" in html_content
+    assert "classifications/systems-thinking.html" in html_content
+    assert (
+        'classifications/systems-thinking.html">Systems Thinking</a>\n    /'
+        not in html_content
+    )
     assert "compact-track-group" not in html_content
     assert "compact-track-row" in html_content
     assert "Foundations" in html_content
@@ -531,19 +581,185 @@ def test_learning_template_includes_switchable_tracks_view(
     assert "Systems Thinking" in html_content
     assert "Distributed Systems" in html_content
     assert "Core concepts." in html_content
+    assert "lessons across this classification" not in html_content
+    assert "lessons across this roadmap" not in html_content
     assert (
         'href="classifications/complexity-and-dynamics.html">Complexity And Dynamics'
         in html_content
     )
+    tracks_view_start = html_content.index('data-learning-view="tracks"')
     assert html_content.index(
-        'href="tracks/systems.html">Systems'
-    ) < html_content.index('href="tracks/foundations.html">Foundations')
+        'href="tracks/systems.html">Systems', tracks_view_start
+    ) < html_content.index(
+        'href="tracks/foundations.html">Foundations', tracks_view_start
+    )
     assert 'href="tracks/private-api.html"' not in html_content
     assert 'href="roadmaps/backend.html">Backend' in html_content
     assert "Explore the curriculum by classification" not in html_content
 
 
-def test_index_template_uses_compact_learning_status(
+def test_learning_template_lists_multiple_current_lessons(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    tracks = load_all_tracks_with_status()
+    classifications = group_tracks_by_classification(tracks)
+    roadmaps = group_tracks_by_roadmap(tracks)
+    active_learning = [
+        {
+            "track_name": "Foundations",
+            "track_description": "Core concepts.",
+            "track_url": "tracks/foundations.html",
+            "lesson_title": "Capstone Foundations",
+            "lesson_url": "lessons/foundations/002.html",
+        },
+        {
+            "track_name": "Systems",
+            "track_description": "Distributed systems.",
+            "track_url": None,
+            "lesson_title": "Distributed Reads",
+            "lesson_url": None,
+        },
+    ]
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "learning.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "learning": None,
+            "active_learning": active_learning,
+            "tracks": tracks,
+            "classifications": classifications,
+            "roadmaps": roadmaps,
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "learning.html",
+    )
+
+    html_content = (temp_output_dir / "learning.html").read_text(encoding="utf-8")
+
+    assert "current-learning-list-compact" in html_content
+    assert "current-learning-card" not in html_content
+    assert "Foundations" in html_content
+    assert "Capstone Foundations" in html_content
+    assert "Core concepts." in html_content
+    assert "Systems" in html_content
+    assert "Distributed Reads" in html_content
+    assert "Distributed systems." in html_content
+    assert "Open current lesson" not in html_content
+    assert "Foundations</a>\n      /" not in html_content
+
+
+def test_classification_template_uses_compact_track_list(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    tracks = load_all_tracks_with_status()
+    classification = group_tracks_by_classification(tracks)[0]
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "classification.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "classification": classification,
+            "tracks": classification["tracks"],
+            "relative_root": "../",
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "classification.html",
+    )
+
+    html_content = (temp_output_dir / "classification.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'class="compact-track-list"' in html_content
+    assert 'class="compact-track-row"' in html_content
+    assert "compact-track-row-minimal" not in html_content
+    assert 'href="../tracks/foundations.html">Foundations' in html_content
+    assert 'href="../classifications/systems-thinking.html"' in html_content
+    assert "Core concepts." in html_content
+    assert "Private API" in html_content
+    assert 'href="../tracks/private-api.html"' not in html_content
+    assert " tracks / " not in html_content
+    assert " lessons" not in html_content
+    assert " complete" not in html_content
+    assert "Open track" not in html_content
+    assert "status-badge" not in html_content
+    assert 'class="track-row' not in html_content
+
+
+def test_roadmap_template_uses_compact_track_list(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    tracks = load_all_tracks_with_status()
+    roadmap = group_tracks_by_roadmap(tracks)[1]
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "roadmap.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "roadmap": roadmap,
+            "tracks": roadmap["tracks"],
+            "relative_root": "../",
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "roadmap.html",
+    )
+
+    html_content = (temp_output_dir / "roadmap.html").read_text(encoding="utf-8")
+
+    assert 'class="compact-track-list"' in html_content
+    assert 'class="compact-track-row"' in html_content
+    assert 'href="../tracks/systems.html">Systems' in html_content
+    assert 'href="../classifications/complexity-and-dynamics.html"' in html_content
+    assert "Distributed systems." in html_content
+    assert " tracks / " not in html_content
+    assert " lessons" not in html_content
+    assert " complete" not in html_content
+    assert "Open track" not in html_content
+    assert "status-badge" not in html_content
+    assert "track-row-" not in html_content
+
+
+def test_index_template_omits_current_learning_card(
     temp_output_dir,
 ):
     temp_output_dir.mkdir(parents=True, exist_ok=True)
@@ -587,13 +803,13 @@ def test_index_template_uses_compact_learning_status(
 
     html_content = (temp_output_dir / "index.html").read_text(encoding="utf-8")
 
-    assert 'class="stack-block home-learning"' in html_content
-    assert "Current Learning" in html_content
-    assert "current-learning-list" in html_content
-    assert "Foundations" in html_content
-    assert "Capstone Foundations" in html_content
-    assert "Systems" in html_content
-    assert "Distributed Reads" in html_content
+    assert 'class="stack-block home-learning"' not in html_content
+    assert "Current Learning" not in html_content
+    assert "current-learning-list" not in html_content
+    assert "Foundations" not in html_content
+    assert "Capstone Foundations" not in html_content
+    assert "Systems" not in html_content
+    assert "Distributed Reads" not in html_content
     assert 'href="tracks/systems.html"' not in html_content
     assert 'href="lessons/systems/001.html"' not in html_content
     assert "CURRENT LEARNING" not in html_content
@@ -648,7 +864,7 @@ def test_track_template_omits_lesson_minutes(
     assert "20 min" not in html_content
 
 
-def test_lesson_template_includes_read_mode_controls(
+def test_lesson_template_uses_reading_layout_and_exit_link(
     sample_learning, sample_config, temp_output_dir
 ):
     save_metadata(
@@ -691,7 +907,11 @@ def test_lesson_template_includes_read_mode_controls(
 
     html_content = (temp_output_dir / "lesson.html").read_text(encoding="utf-8")
 
-    assert "data-read-mode-toggle" in html_content
+    assert '<body class="lesson-reading">' in html_content
+    assert 'class="lesson-exit"' in html_content
+    assert 'href="../tracks/foundations.html"' in html_content
+    assert ">EXIT<" in html_content
+    assert "data-read-mode-toggle" not in html_content
     assert "data-theme-toggle" in html_content
     assert 'class="stack-block lesson-content-shell"' in html_content
     assert 'class="lesson-navigation-grid lesson-page-nav"' in html_content
@@ -702,10 +922,14 @@ def test_lesson_template_includes_read_mode_controls(
     css_content = (
         Path(__file__).resolve().parents[1] / "mystuff/static/css/style.css"
     ).read_text(encoding="utf-8")
-    read_mode_duplicate_title_selector = (
-        'html[data-read-mode="on"] .lesson-content-shell > h1:first-child'
-    )
-    assert read_mode_duplicate_title_selector in css_content
+    assert "body.lesson-reading .lesson-content-shell > h1:first-child" in css_content
+    assert "data-read-mode" not in css_content
+
+    script_content = (
+        Path(__file__).resolve().parents[1] / "mystuff/static/js/site.js"
+    ).read_text(encoding="utf-8")
+    assert "mystuff-cli:read-mode" not in script_content
+    assert "readModeToggle" not in script_content
 
 
 def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
@@ -731,12 +955,52 @@ def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
         "2026-04-02",
     )
 
-    html_content = (
-        temp_output_dir / "lessons" / "foundations" / "001.html"
-    ).read_text(encoding="utf-8")
+    html_content = (temp_output_dir / "lessons" / "foundations" / "001.html").read_text(
+        encoding="utf-8"
+    )
 
     assert 'href="002.html"' in html_content
     assert 'href="https://example.com/doc.md"' in html_content
+
+
+def test_generate_lesson_pages_renders_generated_quote_list(
+    sample_learning, sample_config, temp_output_dir, tmp_path, monkeypatch
+):
+    lesson_path = sample_learning / "lessons" / "foundations" / "001.md"
+    lesson_path.write_text(
+        lesson_path.read_text(encoding="utf-8")
+        + "\n> **By the end of this lesson, you will be able to:**\n"
+        "> - identify the participants;\n"
+        "> - explain the promise.\n",
+        encoding="utf-8",
+    )
+
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "lesson.html").write_text("{{ lesson_content }}", encoding="utf-8")
+    monkeypatch.setattr(
+        "mystuff.commands.generate.get_templates_dir", lambda: templates_dir
+    )
+
+    temp_output_dir.mkdir()
+    generate_lesson_pages(
+        temp_output_dir,
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+        },
+        "2026-04-02",
+    )
+
+    html_content = (temp_output_dir / "lessons" / "foundations" / "001.html").read_text(
+        encoding="utf-8"
+    )
+    assert "<blockquote>" in html_content
+    assert "<ul>" in html_content
+    assert "<li>" in html_content
+    assert "identify the participants;" in html_content
 
 
 def test_generate_static_web_creates_track_and_lesson_pages(
@@ -753,7 +1017,9 @@ def test_generate_static_web_creates_track_and_lesson_pages(
 
     templates_dir = tmp_path / "templates"
     templates_dir.mkdir()
-    (templates_dir / "index.html").write_text("{{ learning.lesson_title if learning else 'none' }}", encoding="utf-8")
+    (templates_dir / "index.html").write_text(
+        "{{ learning.lesson_title if learning else 'none' }}", encoding="utf-8"
+    )
     (templates_dir / "links.html").write_text("links", encoding="utf-8")
     (templates_dir / "learning.html").write_text(
         "{% for classification in classifications %}{{ classification.classification_id }}->{{ classification.url }} {% endfor %}",
@@ -779,14 +1045,14 @@ def test_generate_static_web_creates_track_and_lesson_pages(
     static_dir = tmp_path / "static"
     static_dir.mkdir()
     (static_dir / "css").mkdir()
-    (static_dir / "css" / "style.css").write_text("body { margin: 0; }", encoding="utf-8")
+    (static_dir / "css" / "style.css").write_text(
+        "body { margin: 0; }", encoding="utf-8"
+    )
 
     monkeypatch.setattr(
         "mystuff.commands.generate.get_templates_dir", lambda: templates_dir
     )
-    monkeypatch.setattr(
-        "mystuff.commands.generate.get_static_dir", lambda: static_dir
-    )
+    monkeypatch.setattr("mystuff.commands.generate.get_static_dir", lambda: static_dir)
 
     generate_static_web(temp_output_dir, get_generate_config())
 
@@ -807,9 +1073,12 @@ def test_generate_static_web_creates_track_and_lesson_pages(
     assert "../classifications/systems-thinking.html foundations Foundations" in (
         temp_output_dir / "tracks" / "foundations.html"
     ).read_text(encoding="utf-8")
-    assert "../../classifications/systems-thinking.html Foundations Intro to Foundations" in (
-        temp_output_dir / "lessons" / "foundations" / "001.html"
-    ).read_text(encoding="utf-8")
+    assert (
+        "../../classifications/systems-thinking.html Foundations Intro to Foundations"
+        in (temp_output_dir / "lessons" / "foundations" / "001.html").read_text(
+            encoding="utf-8"
+        )
+    )
 
 
 def test_extract_lesson_title_full_format():
@@ -818,7 +1087,6 @@ def test_extract_lesson_title_full_format():
 # Topic: Resilience
 """
     assert extract_lesson_title(content) == "Day 012: Adaptive Systems (Resilience)"
-
 
 
 def test_load_all_tracks_with_status_keeps_unpublished_track_unlinked(

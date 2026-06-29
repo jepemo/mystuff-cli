@@ -13,10 +13,10 @@ from urllib.parse import urlsplit, urlunsplit
 
 import jinja2
 import markdown
-from markdown.extensions import Extension
-from markdown.treeprocessors import Treeprocessor
 import typer
 import yaml
+from markdown.extensions import Extension
+from markdown.treeprocessors import Treeprocessor
 from rich.console import Console
 
 from mystuff.learning_catalog import (
@@ -24,10 +24,10 @@ from mystuff.learning_catalog import (
     attach_progress,
     get_completed_lesson_ids,
     get_current_lesson,
-    get_current_lesson_ids_by_track,
     load_learning_catalog,
     load_metadata,
 )
+from mystuff.markdown_utils import normalize_lesson_markdown
 
 console = Console()
 
@@ -58,15 +58,15 @@ def rewrite_lesson_markdown_link(
     if resolved_target not in known_lesson_paths:
         return href
 
-    current_output_dir = posixpath.dirname(
-        source_rel_path.removesuffix(".md") + ".html"
-    ) or "."
-    target_output_path = resolved_target.removesuffix(".md") + ".html"
-    relative_output_path = posixpath.relpath(target_output_path, start=current_output_dir)
-
-    return urlunsplit(
-        ("", "", relative_output_path, parsed.query, parsed.fragment)
+    current_output_dir = (
+        posixpath.dirname(source_rel_path.removesuffix(".md") + ".html") or "."
     )
+    target_output_path = resolved_target.removesuffix(".md") + ".html"
+    relative_output_path = posixpath.relpath(
+        target_output_path, start=current_output_dir
+    )
+
+    return urlunsplit(("", "", relative_output_path, parsed.query, parsed.fragment))
 
 
 class LessonLinkRewriteTreeprocessor(Treeprocessor):
@@ -172,16 +172,16 @@ class TrackLinkRewriteTreeprocessor(Treeprocessor):
 class TrackLinkRewriteExtension(Extension):
     """Markdown extension that rewrites internal lesson links from track pages."""
 
-    def __init__(self, *, track_id: str, known_lesson_paths: set[str], **kwargs) -> None:
+    def __init__(
+        self, *, track_id: str, known_lesson_paths: set[str], **kwargs
+    ) -> None:
         self.track_id = track_id
         self.known_lesson_paths = known_lesson_paths
         super().__init__(**kwargs)
 
     def extendMarkdown(self, md) -> None:
         md.treeprocessors.register(
-            TrackLinkRewriteTreeprocessor(
-                md, self.track_id, self.known_lesson_paths
-            ),
+            TrackLinkRewriteTreeprocessor(md, self.track_id, self.known_lesson_paths),
             "track_link_rewrite",
             15,
         )
@@ -233,7 +233,7 @@ def extract_lesson_title(lesson_content: str) -> Optional[str]:
     """
     import re
 
-    lines = lesson_content.strip().split('\n')
+    lines = lesson_content.strip().split("\n")
 
     day_title = None
     topic = None
@@ -242,14 +242,14 @@ def extract_lesson_title(lesson_content: str) -> Optional[str]:
         line = line.strip()
 
         # Match "# Day XXX: Title"
-        day_match = re.match(r'^#\s+Day\s+(\d+):\s*(.+)$', line, re.IGNORECASE)
+        day_match = re.match(r"^#\s+Day\s+(\d+):\s*(.+)$", line, re.IGNORECASE)
         if day_match and not day_title:
             day_number = day_match.group(1)
             title = day_match.group(2).strip()
             day_title = f"Day {day_number}: {title}"
 
         # Match "# Topic: Topic Name"
-        topic_match = re.match(r'^#\s+Topic:\s*(.+)$', line, re.IGNORECASE)
+        topic_match = re.match(r"^#\s+Topic:\s*(.+)$", line, re.IGNORECASE)
         if topic_match and not topic:
             topic = topic_match.group(1).strip()
 
@@ -281,13 +281,13 @@ def extract_lesson_topic(lesson_content: str) -> Optional[str]:
     """
     import re
 
-    lines = lesson_content.strip().split('\n')
+    lines = lesson_content.strip().split("\n")
 
     for line in lines:
         line = line.strip()
 
         # Match "# Topic: Topic Name"
-        topic_match = re.match(r'^#\s+Topic:\s*(.+)$', line, re.IGNORECASE)
+        topic_match = re.match(r"^#\s+Topic:\s*(.+)$", line, re.IGNORECASE)
         if topic_match:
             return topic_match.group(1).strip()
 
@@ -307,11 +307,11 @@ def extract_frontmatter(content: str) -> tuple[Optional[Dict[str, Any]], str]:
     import re
 
     # Check if content starts with frontmatter delimiter
-    if not content.startswith('---'):
+    if not content.startswith("---"):
         return None, content
 
     # Find the closing delimiter
-    pattern = r'^---\s*\n(.*?)\n---\s*\n(.*)$'
+    pattern = r"^---\s*\n(.*?)\n---\s*\n(.*)$"
     match = re.match(pattern, content, re.DOTALL)
 
     if not match:
@@ -355,7 +355,9 @@ def get_generate_config() -> Dict[str, Any]:
     return generate_config
 
 
-def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict[str, Any]]:
+def fetch_github_repo_details(
+    username: str, repo_names: List[str]
+) -> List[Dict[str, Any]]:
     """Fetch details for specific GitHub repositories.
 
     Uses GitHub's REST API to fetch repository information for the specified
@@ -394,7 +396,7 @@ def fetch_github_repo_details(username: str, repo_names: List[str]) -> List[Dict
                 "name": repo_data["name"],
                 "description": repo_data.get("description", ""),
                 "url": repo_data["html_url"],
-                "language": repo_data.get("language")
+                "language": repo_data.get("language"),
             }
             repos.append(repo)
 
@@ -451,11 +453,7 @@ def _load_catalog_with_progress() -> tuple[Dict[str, Any], Dict[str, Any]]:
 
 
 def _public_tracks(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return [
-        track
-        for track in catalog["tracks"]
-        if _is_track_published(track)
-    ]
+    return [track for track in catalog["tracks"] if _is_track_published(track)]
 
 
 def _is_track_published(track: Dict[str, Any]) -> bool:
@@ -481,7 +479,9 @@ def load_learning_data() -> Optional[Dict[str, Any]]:
     try:
         catalog, metadata = _load_catalog_with_progress()
     except LearningCatalogError as exc:
-        console.print(f"[yellow]⚠️  Warning: Could not load learning data: {exc}[/yellow]")
+        console.print(
+            f"[yellow]⚠️  Warning: Could not load learning data: {exc}[/yellow]"
+        )
         return None
 
     current_lesson = get_current_lesson(metadata, catalog)
@@ -489,7 +489,11 @@ def load_learning_data() -> Optional[Dict[str, Any]]:
         return None
 
     track = catalog["tracks_by_id"][current_lesson["track_id"]]
-    if track["status"] != "active" or not track.get("public", True) or not current_lesson["public"]:
+    if (
+        track["status"] != "active"
+        or not track.get("public", True)
+        or not current_lesson["public"]
+    ):
         return None
 
     return {
@@ -539,7 +543,8 @@ def load_active_learning_data() -> List[Dict[str, Any]]:
         )
         return []
 
-    current_lesson_id = metadata.get("current_lesson_id")
+    # Progress comes from the catalog's per-track cursor.  The legacy global
+    # cursor may be used only while attaching progress for old metadata.
     learning_items: List[Dict[str, Any]] = []
     for track in catalog["tracks"]:
         if track["status"] != "active" or track.get("progress_status") != "in_progress":
@@ -557,6 +562,7 @@ def load_active_learning_data() -> List[Dict[str, Any]]:
                 "lesson_url": lesson["url"] if is_published else None,
                 "track_id": track["track_id"],
                 "track_name": track["name"],
+                "track_description": track.get("description", ""),
                 "track_url": track["url"] if track.get("public", True) else None,
                 "classification_id": track["classification"],
                 "classification_name": track.get("classification_name")
@@ -566,12 +572,8 @@ def load_active_learning_data() -> List[Dict[str, Any]]:
                     if track.get("public", True)
                     else None
                 ),
-                "last_opened_at": (
-                    metadata.get("last_opened_at")
-                    if lesson["lesson_id"] == current_lesson_id
-                    else None
-                ),
-                "is_current": lesson["lesson_id"] == current_lesson_id,
+                "last_opened_at": None,
+                "is_current": lesson.get("progress_status") == "current",
             }
         )
 
@@ -583,10 +585,6 @@ def load_all_tracks_with_status() -> List[Dict[str, Any]]:
     """Load all tracks for catalog display, linking only published tracks."""
     catalog, metadata = _load_catalog_with_progress()
     completed_ids = get_completed_lesson_ids(metadata)
-    current_lesson_id = metadata.get("current_lesson_id")
-    current_lesson_ids = set(get_current_lesson_ids_by_track(metadata).values())
-    if current_lesson_id:
-        current_lesson_ids.add(str(current_lesson_id))
 
     tracks: List[Dict[str, Any]] = []
     for track in catalog["tracks"]:
@@ -597,7 +595,11 @@ def load_all_tracks_with_status() -> List[Dict[str, Any]]:
             for lesson in _public_lessons(track):
                 lesson_copy = dict(lesson)
                 lesson_copy["status"] = _public_lesson_status(
-                    lesson_copy, completed_ids, current_lesson_ids
+                    lesson_copy,
+                    completed_ids,
+                    {track["current_lesson_id"]}
+                    if track.get("current_lesson_id")
+                    else set(),
                 )
                 lesson_copy["display_title"] = (
                     f"{lesson_copy['sequence_label']}. {lesson_copy['title']}"
@@ -638,7 +640,9 @@ def load_all_tracks_with_status() -> List[Dict[str, Any]]:
     return tracks
 
 
-def group_tracks_by_classification(tracks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def group_tracks_by_classification(
+    tracks: List[Dict[str, Any]],
+) -> List[Dict[str, Any]]:
     """Group already-filtered tracks by classification for rendering."""
     classifications_by_id: Dict[str, Dict[str, Any]] = {}
     classifications: List[Dict[str, Any]] = []
@@ -797,14 +801,10 @@ def render_template(
 
         console.print(f"  ✅ Generated {output_path.name}")
     except jinja2.TemplateNotFound:
-        console.print(
-            f"[red]❌ Template not found: {template_name}[/red]"
-        )
+        console.print(f"[red]❌ Template not found: {template_name}[/red]")
         raise typer.Exit(1)
     except Exception as e:
-        console.print(
-            f"[red]❌ Error rendering template {template_name}: {e}[/red]"
-        )
+        console.print(f"[red]❌ Error rendering template {template_name}: {e}[/red]")
         raise typer.Exit(1)
 
 
@@ -828,7 +828,7 @@ def _render_lesson_markdown(
         ],
         tab_length=2,
     )
-    return md.convert(content_without_frontmatter)
+    return md.convert(normalize_lesson_markdown(content_without_frontmatter))
 
 
 def _relative_output_path(source_path: str) -> str:
@@ -850,7 +850,9 @@ def generate_classification_pages(
 ) -> None:
     """Generate one public page per classification."""
     if not classifications:
-        console.print("  ℹ️  No public classifications found, skipping classification pages")
+        console.print(
+            "  ℹ️  No public classifications found, skipping classification pages"
+        )
         return
 
     classifications_output = output_dir / "classifications"
@@ -859,8 +861,7 @@ def generate_classification_pages(
     console.print(f"  🗂️  Generating {len(classifications)} classification pages...")
     for classification in classifications:
         output_path = (
-            classifications_output
-            / f"{classification['classification_id']}.html"
+            classifications_output / f"{classification['classification_id']}.html"
         )
         context = {
             "title": config.get("title", "My Knowledge Base"),
@@ -973,9 +974,7 @@ def generate_lesson_pages(
             lesson_html = _render_lesson_markdown(lesson, known_lesson_paths)
             prev_lesson_data = track_lessons[index - 1] if index > 0 else None
             next_lesson_data = (
-                track_lessons[index + 1]
-                if index < len(track_lessons) - 1
-                else None
+                track_lessons[index + 1] if index < len(track_lessons) - 1 else None
             )
 
             relative_root = "../" * len(Path(lesson["path"]).parts)
@@ -999,7 +998,9 @@ def generate_lesson_pages(
 
             context = {
                 "title": config.get("title", "My Knowledge Base"),
-                "description": config.get("description", "Personal knowledge management"),
+                "description": config.get(
+                    "description", "Personal knowledge management"
+                ),
                 "author": config.get("author", "Your Name"),
                 "menu_items": config.get("menu_items", []),
                 "lesson": lesson,
@@ -1101,9 +1102,7 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     if links_template.exists():
         render_template("links.html", context, output_dir / "links.html")
     else:
-        console.print(
-            "[yellow]  ⚠️  Skipping links.html (template not found)[/yellow]"
-        )
+        console.print("[yellow]  ⚠️  Skipping links.html (template not found)[/yellow]")
 
     learning_template = get_templates_dir() / "learning.html"
     if learning_template.exists():
@@ -1115,9 +1114,7 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
 
     classification_template = get_templates_dir() / "classification.html"
     if classification_template.exists():
-        generate_classification_pages(
-            output_dir, config, generated_at, classifications
-        )
+        generate_classification_pages(output_dir, config, generated_at, classifications)
     else:
         console.print(
             "[yellow]  ⚠️  Skipping classification pages (template not found)[/yellow]"
@@ -1135,9 +1132,7 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     if track_template.exists():
         generate_track_pages(output_dir, config, generated_at, published_tracks)
     else:
-        console.print(
-            "[yellow]  ⚠️  Skipping track pages (template not found)[/yellow]"
-        )
+        console.print("[yellow]  ⚠️  Skipping track pages (template not found)[/yellow]")
 
     generate_lesson_pages(output_dir, config, generated_at, tracks=published_tracks)
 

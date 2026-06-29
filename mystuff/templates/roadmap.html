@@ -6,44 +6,26 @@
 {% block content %}
 <h1>{{ roadmap.roadmap_name }}</h1>
 
-<section class="stack-block">
-  <p class="breadcrumb">
-    <a href="{{ relative_root }}learning.html#roadmaps">Roadmaps</a>
-    /
-    {{ roadmap.roadmap_name }}
-  </p>
-  <p class="page-kicker">ROADMAP</p>
-  <p>{{ roadmap.track_count }} tracks / {{ roadmap.lesson_count }} lessons</p>
-</section>
+<p class="breadcrumb">
+  <a href="{{ relative_root }}learning.html#roadmaps">Roadmaps</a>
+  /
+  {{ roadmap.roadmap_name }}
+</p>
 
 <section class="stack-block">
   <p class="page-kicker">TRACKS</p>
-  <div class="track-rail">
+  <div class="compact-track-list">
     {% for track in tracks %}
-    <article class="track-row track-row-{{ track.public_progress_status }}">
-      <div class="track-row-main">
-        <p class="status-badge">
-          [{% if track.public_progress_status == 'done' %}DONE{% elif track.public_progress_status == 'current' or track.public_progress_status == 'in_progress' %}CONTINUE{% elif track.public_progress_status == 'locked' %}LOCKED{% elif track.public_progress_status == 'draft' %}DRAFT{% elif track.public_progress_status == 'unpublished' %}HIDDEN{% else %}START{% endif %}]
-        </p>
-        <h2>
-          {% if track.track_url %}<a href="{{ relative_root }}{{ track.track_url }}">{{ track.name }}</a>{% else %}{{ track.name }}{% endif %}
-        </h2>
-        {% if track.description %}
-        <p class="track-summary">{{ track.description }}</p>
-        {% endif %}
-      </div>
-      <div class="track-row-side">
-        <p class="track-row-meta">
-          {% if track.track_tier %}{{ track.track_tier|replace('-', ' ')|title }} / {% endif %}
-          {{ track.display_lesson_count }} lessons
-        </p>
-        {% if track.is_published %}
-        <p class="track-row-progress">{{ track.completed_public_count }}/{{ track.public_lesson_count }} complete</p>
-        <p><a class="cta-link" href="{{ relative_root }}{{ track.track_url }}">Open track</a></p>
-        {% else %}
-        <p class="track-row-progress">Not published</p>
-        {% endif %}
-      </div>
+    <article class="compact-track-row">
+      <h2>
+        {% if track.track_url %}<a href="{{ relative_root }}{{ track.track_url }}">{{ track.name }}</a>{% else %}{{ track.name }}{% endif %}
+      </h2>
+      <p class="compact-track-classification">
+        <a href="{{ relative_root }}classifications/{{ track.classification }}.html">{{ track.classification_name }}</a>
+      </p>
+      <p class="compact-track-description">
+        {% if track.description %}{{ track.description }}{% else %}-{% endif %}
+      </p>
     </article>
     {% endfor %}
   </div>

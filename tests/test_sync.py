@@ -52,7 +52,7 @@ def test_get_mystuff_dir_with_config(temp_mystuff_dir):
         # Clear MYSTUFF_HOME to test directory search
         if "MYSTUFF_HOME" in os.environ:
             del os.environ["MYSTUFF_HOME"]
-        
+
         os.chdir(temp_mystuff_dir)
         mystuff_dir = get_mystuff_dir()
         # Resolve both paths to handle macOS /private/var vs /var differences
@@ -75,7 +75,7 @@ def test_get_mystuff_dir_no_config():
             # Clear MYSTUFF_HOME to test directory search
             if "MYSTUFF_HOME" in os.environ:
                 del os.environ["MYSTUFF_HOME"]
-            
+
             os.chdir(temp_dir)
             mystuff_dir = get_mystuff_dir()
             assert mystuff_dir is None
@@ -148,7 +148,11 @@ def test_execute_sync_commands_success(temp_mystuff_dir):
     config = {"data_directory": str(temp_mystuff_dir)}
 
     success = execute_sync_commands(
-        commands=commands, mystuff_dir=temp_mystuff_dir, config=config, dry_run=False, verbose=False
+        commands=commands,
+        mystuff_dir=temp_mystuff_dir,
+        config=config,
+        dry_run=False,
+        verbose=False,
     )
 
     assert success is True
@@ -208,7 +212,7 @@ def test_sync_run_command_dry_run(runner, temp_mystuff_dir):
         # Clear MYSTUFF_HOME to use temp directory
         if "MYSTUFF_HOME" in os.environ:
             del os.environ["MYSTUFF_HOME"]
-        
+
         os.chdir(temp_mystuff_dir)
         result = runner.invoke(sync_app, ["run", "--dry-run"])
         assert result.exit_code == 0
@@ -232,7 +236,7 @@ def test_sync_run_command_success(runner, temp_mystuff_dir):
         # Clear MYSTUFF_HOME to use temp directory
         if "MYSTUFF_HOME" in os.environ:
             del os.environ["MYSTUFF_HOME"]
-        
+
         os.chdir(temp_mystuff_dir)
         result = runner.invoke(sync_app, ["run"])
         assert result.exit_code == 0
@@ -256,7 +260,7 @@ def test_sync_run_command_no_mystuff_dir(runner):
             # Clear MYSTUFF_HOME to test no mystuff dir found
             if "MYSTUFF_HOME" in os.environ:
                 del os.environ["MYSTUFF_HOME"]
-            
+
             os.chdir(temp_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
@@ -278,7 +282,7 @@ def test_sync_list_commands(runner, temp_mystuff_dir):
         # Clear MYSTUFF_HOME to use temp directory
         if "MYSTUFF_HOME" in os.environ:
             del os.environ["MYSTUFF_HOME"]
-        
+
         os.chdir(temp_mystuff_dir)
         result = runner.invoke(sync_app, ["list-commands"])
         assert result.exit_code == 0
@@ -311,7 +315,7 @@ def test_sync_list_commands_no_commands(runner):
             # Clear MYSTUFF_HOME to use temp directory
             if "MYSTUFF_HOME" in os.environ:
                 del os.environ["MYSTUFF_HOME"]
-            
+
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["list-commands"])
             assert result.exit_code == 1  # Should exit with error when no sync section
@@ -340,7 +344,7 @@ def test_sync_with_invalid_config(runner):
             # Clear MYSTUFF_HOME to use temp directory
             if "MYSTUFF_HOME" in os.environ:
                 del os.environ["MYSTUFF_HOME"]
-            
+
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1
@@ -371,7 +375,7 @@ def test_sync_with_non_list_commands(runner):
             # Clear MYSTUFF_HOME to use temp directory
             if "MYSTUFF_HOME" in os.environ:
                 del os.environ["MYSTUFF_HOME"]
-            
+
             os.chdir(mystuff_dir)
             result = runner.invoke(sync_app, ["run"])
             assert result.exit_code == 1

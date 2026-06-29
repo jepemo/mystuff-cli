@@ -2,10 +2,9 @@
 
 {% block page_title %}{{ lesson_title }} - @{{ author }}{% endblock %}
 {% block main_class %}lesson-page{% endblock %}
+{% block body_attributes %} class="lesson-reading"{% endblock %}
 {% block header_actions %}
-<button class="read-mode-toggle" type="button" data-read-mode-toggle aria-label="Enter read mode" aria-pressed="false">
-  READ
-</button>
+<a class="lesson-exit" href="{{ track_page_url }}" aria-label="Exit lesson and return to {{ track.name }}">EXIT</a>
 {% endblock %}
 
 {% block content %}

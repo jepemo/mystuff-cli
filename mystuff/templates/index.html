@@ -5,32 +5,6 @@
 {% block content %}
 <p>{{ description }}</p>
 
-{% set learning_items = active_learning if active_learning is defined and active_learning else ([learning] if learning else []) %}
-
-{% if learning_items %}
-<section class="stack-block home-learning">
-  <h2>Current Learning</h2>
-  {% if learning_items|length == 1 %}
-  {% set item = learning_items[0] %}
-  <p class="home-learning-main">
-    {% if item.track_url %}<a href="{{ item.track_url }}">{{ item.track_name }}</a>{% else %}{{ item.track_name }}{% endif %}
-    /
-    {% if item.lesson_url %}<a href="{{ item.lesson_url }}">{{ item.lesson_title }}</a>{% else %}{{ item.lesson_title }}{% endif %}
-  </p>
-  {% else %}
-  <ul class="current-learning-list">
-    {% for item in learning_items %}
-    <li>
-      {% if item.track_url %}<a href="{{ item.track_url }}">{{ item.track_name }}</a>{% else %}{{ item.track_name }}{% endif %}
-      /
-      {% if item.lesson_url %}<a href="{{ item.lesson_url }}">{{ item.lesson_title }}</a>{% else %}{{ item.lesson_title }}{% endif %}
-    </li>
-    {% endfor %}
-  </ul>
-  {% endif %}
-</section>
-{% endif %}
-
 {% if repositories %}
 <section class="stack-block">
   <h2>Open Source</h2>

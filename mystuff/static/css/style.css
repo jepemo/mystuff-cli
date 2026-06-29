@@ -157,7 +157,7 @@ main,
 }
 
 .theme-toggle,
-.read-mode-toggle {
+.lesson-exit {
   display: grid;
   height: 2.5rem;
   place-items: center;
@@ -173,15 +173,18 @@ main,
   font: 1.35rem/1 var(--body-font);
 }
 
-.read-mode-toggle {
+.lesson-exit,
+.lesson-exit:visited {
   min-width: 3.6rem;
   padding: 0 .6rem;
+  color: var(--button-fg);
   font: 700 .78rem/1 var(--meta-font);
   letter-spacing: 0;
+  text-decoration: none;
 }
 
 .theme-toggle:hover,
-.read-mode-toggle:hover {
+.lesson-exit:hover {
   color: var(--button-hover-fg);
   background: var(--button-hover-bg);
 }
@@ -426,6 +429,29 @@ blockquote {
   font-size: 1.05rem;
 }
 
+.current-learning-card {
+  display: grid;
+  gap: .35rem;
+}
+
+.current-learning-card h3,
+.current-learning-card p {
+  margin: 0;
+}
+
+.current-learning-card h3 {
+  font-size: 1.05rem;
+}
+
+.current-learning-lesson {
+  font-weight: 700;
+}
+
+.current-learning-description {
+  color: var(--muted);
+  font: .9rem/1.45 var(--meta-font);
+}
+
 .current-learning-list {
   margin: .35rem 0 0;
   padding-left: 1.25rem;
@@ -433,6 +459,18 @@ blockquote {
 
 .current-learning-list li {
   margin: .2rem 0;
+}
+
+.current-learning-list-compact {
+  display: grid;
+  gap: .4rem;
+  padding-left: 0;
+  list-style: none;
+}
+
+.current-learning-list-compact li {
+  display: grid;
+  gap: .12rem;
 }
 
 .learning-header {
@@ -662,7 +700,7 @@ blockquote {
   margin: 0 0 .45rem;
 }
 
-html[data-read-mode="on"] .site-header {
+body.lesson-reading .site-header {
   width: 0;
   height: 0;
   margin: 0;
@@ -670,27 +708,27 @@ html[data-read-mode="on"] .site-header {
   border: 0;
 }
 
-html[data-read-mode="on"] .site-title,
-html[data-read-mode="on"] .site-path,
-html[data-read-mode="on"] .site-footer,
-html[data-read-mode="on"] .lesson-context {
+body.lesson-reading .site-title,
+body.lesson-reading .site-path,
+body.lesson-reading .site-footer,
+body.lesson-reading .lesson-context {
   display: none;
 }
 
-html[data-read-mode="on"] main.lesson-page {
+body.lesson-reading main.lesson-page {
   width: min(var(--reading-width), calc(100% - 2rem));
   padding: 4rem 0 2rem;
 }
 
-html[data-read-mode="on"] .lesson-page h1 {
+body.lesson-reading .lesson-page h1 {
   margin-bottom: 1.4rem;
 }
 
-html[data-read-mode="on"] .lesson-content-shell > h1:first-child {
+body.lesson-reading .lesson-content-shell > h1:first-child {
   display: none;
 }
 
-html[data-read-mode="on"] .lesson-content-shell {
+body.lesson-reading .lesson-content-shell {
   max-width: none;
   margin: 0;
   padding: 0;
@@ -699,7 +737,7 @@ html[data-read-mode="on"] .lesson-content-shell {
   overflow-x: visible;
 }
 
-html[data-read-mode="on"] .lesson-page-nav {
+body.lesson-reading .lesson-page-nav {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1rem;
@@ -708,28 +746,28 @@ html[data-read-mode="on"] .lesson-page-nav {
   border-top: 1px solid var(--line);
 }
 
-html[data-read-mode="on"] .lesson-page-nav .nav-card,
-html[data-read-mode="on"] .lesson-page-nav .nav-card:hover,
-html[data-read-mode="on"] .lesson-link-strip {
+body.lesson-reading .lesson-page-nav .nav-card,
+body.lesson-reading .lesson-page-nav .nav-card:hover,
+body.lesson-reading .lesson-link-strip {
   border: 0;
   background: transparent;
 }
 
-html[data-read-mode="on"] .lesson-page-nav .nav-card {
+body.lesson-reading .lesson-page-nav .nav-card {
   color: var(--fg);
   padding: 0;
 }
 
-html[data-read-mode="on"] .lesson-page-nav .nav-card:hover {
+body.lesson-reading .lesson-page-nav .nav-card:hover {
   color: var(--accent);
 }
 
-html[data-read-mode="on"] .lesson-page-nav .nav-card-disabled,
-html[data-read-mode="on"] .lesson-page-nav .nav-card-disabled:hover {
+body.lesson-reading .lesson-page-nav .nav-card-disabled,
+body.lesson-reading .lesson-page-nav .nav-card-disabled:hover {
   color: var(--muted);
 }
 
-html[data-read-mode="on"] .lesson-link-strip {
+body.lesson-reading .lesson-link-strip {
   display: flex;
   flex-wrap: wrap;
   gap: .35rem 1rem;
@@ -738,7 +776,7 @@ html[data-read-mode="on"] .lesson-link-strip {
   border-top: 1px solid var(--line);
 }
 
-html[data-read-mode="on"] .lesson-link-strip p {
+body.lesson-reading .lesson-link-strip p {
   max-width: none;
   margin: 0;
 }
@@ -824,7 +862,7 @@ html[data-read-mode="on"] .lesson-link-strip p {
     flex: 1 1 0;
   }
 
-  html[data-read-mode="on"] .lesson-page-nav {
+  body.lesson-reading .lesson-page-nav {
     grid-template-columns: 1fr;
   }
 }

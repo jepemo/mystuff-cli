@@ -181,9 +181,7 @@ def _load_lesson(
 
     frontmatter, body = extract_frontmatter(content)
     if frontmatter is None:
-        raise LearningCatalogError(
-            f"Lesson '{file_path}' is missing YAML frontmatter."
-        )
+        raise LearningCatalogError(f"Lesson '{file_path}' is missing YAML frontmatter.")
 
     lesson_id = str(frontmatter.get("lesson_id") or "").strip()
     title = str(frontmatter.get("title") or "").strip()
@@ -235,7 +233,9 @@ def _load_lesson(
         "review_status": str(frontmatter.get("review_status") or "").strip() or None,
         "lesson_kind": str(frontmatter.get("lesson_kind") or "").strip() or "lesson",
         "capstone_scope": str(frontmatter.get("capstone_scope") or "").strip() or None,
-        "depends_on_tracks": _normalize_string_list(frontmatter.get("depends_on_tracks")),
+        "depends_on_tracks": _normalize_string_list(
+            frontmatter.get("depends_on_tracks")
+        ),
         "legacy_day": _normalize_optional_int(frontmatter.get("legacy_day")),
         "legacy_path": str(frontmatter.get("legacy_path") or "").strip() or None,
         "path": str(file_path.relative_to(lessons_dir)),
@@ -294,7 +294,9 @@ def _load_track(track_dir: Path, lessons_dir: Path) -> Dict[str, Any]:
     lessons.sort(key=lambda lesson: lesson["sequence"])
 
     declared_lesson_count = _normalize_optional_int(frontmatter.get("lesson_count"))
-    target_lesson_count = _normalize_optional_int(frontmatter.get("target_lesson_count"))
+    target_lesson_count = _normalize_optional_int(
+        frontmatter.get("target_lesson_count")
+    )
     actual_lesson_count = len(lessons)
     if (
         declared_lesson_count is not None
@@ -323,13 +325,16 @@ def _load_track(track_dir: Path, lessons_dir: Path) -> Dict[str, Any]:
         "roadmap_name": _humanize_slug(frontmatter.get("roadmap") or "uncategorized"),
         "track_tier": str(frontmatter.get("track_tier") or "").strip() or None,
         "target_lesson_count": target_lesson_count,
-        "depends_on_tracks": _normalize_string_list(frontmatter.get("depends_on_tracks")),
+        "depends_on_tracks": _normalize_string_list(
+            frontmatter.get("depends_on_tracks")
+        ),
         "status": str(frontmatter.get("status") or "active").strip() or "active",
         "public": _normalize_bool(frontmatter.get("public"), default=True),
         "lesson_count": actual_lesson_count,
         "difficulty_min": str(frontmatter.get("difficulty_min") or "").strip() or None,
         "difficulty_max": str(frontmatter.get("difficulty_max") or "").strip() or None,
-        "capstone_policy": str(frontmatter.get("capstone_policy") or "").strip() or None,
+        "capstone_policy": str(frontmatter.get("capstone_policy") or "").strip()
+        or None,
         "legacy_source_ranges": _normalize_string_list(
             frontmatter.get("legacy_source_ranges")
         ),
@@ -471,13 +476,9 @@ def load_metadata() -> Dict[str, Any]:
         with open(metadata_path, "r", encoding="utf-8") as handle:
             raw_metadata = yaml.safe_load(handle)
     except yaml.YAMLError as exc:
-        raise LearningMetadataError(
-            f"Error parsing metadata.yaml: {exc}"
-        ) from exc
+        raise LearningMetadataError(f"Error parsing metadata.yaml: {exc}") from exc
     except OSError as exc:
-        raise LearningMetadataError(
-            f"Error reading metadata.yaml: {exc}"
-        ) from exc
+        raise LearningMetadataError(f"Error reading metadata.yaml: {exc}") from exc
 
     if raw_metadata is None:
         metadata = fresh_metadata_template()
@@ -626,14 +627,21 @@ def attach_progress(
 ) -> Dict[str, Any]:
     """Attach progress fields to tracks and lessons."""
     completed_lesson_ids = get_completed_lesson_ids(metadata)
-    completed_track_ids = _completed_track_ids(
-        catalog["tracks"], completed_lesson_ids
-    )
-    current_lesson_id = metadata.get("current_lesson_id")
+    completed_track_ids = _completed_track_ids(catalog["tracks"], completed_lesson_ids)
     current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    # Schema v2 initially stored a single global cursor.  Honour it only for
+    # old metadata that has not acquired a per-track cursor yet; once a track
+    # cursor exists it is the source of truth.
+    if not current_lesson_ids_by_track and metadata.get("current_lesson_id"):
+        legacy_current_lesson = catalog["lessons_by_id"].get(
+            str(metadata["current_lesson_id"])
+        )
+        if legacy_current_lesson:
+            current_lesson_ids_by_track[legacy_current_lesson["track_id"]] = (
+                legacy_current_lesson["lesson_id"]
+            )
+
     current_lesson_ids = set(current_lesson_ids_by_track.values())
-    if current_lesson_id:
-        current_lesson_ids.add(str(current_lesson_id))
 
     for lesson in catalog["lessons"]:
         if (
@@ -653,15 +661,6 @@ def attach_progress(
             if lesson["lesson_id"] in completed_lesson_ids
         )
         track_current_lesson_id = current_lesson_ids_by_track.get(track["track_id"])
-        if not track_current_lesson_id:
-            track_current_lesson_id = next(
-                (
-                    lesson["lesson_id"]
-                    for lesson in track["lessons"]
-                    if lesson["lesson_id"] == current_lesson_id
-                ),
-                None,
-            )
         current_in_track = next(
             (
                 lesson
@@ -697,9 +696,7 @@ def attach_progress(
     return catalog
 
 
-def resolve_track_reference(
-    reference: str, catalog: Dict[str, Any]
-) -> Dict[str, Any]:
+def resolve_track_reference(reference: str, catalog: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve a track by track_id."""
     normalized = str(reference or "").strip()
     if normalized in catalog["tracks_by_id"]:
@@ -708,9 +705,7 @@ def resolve_track_reference(
     raise LearningReferenceError(f"Unknown track: {reference}")
 
 
-def resolve_lesson_reference(
-    reference: str, catalog: Dict[str, Any]
-) -> Dict[str, Any]:
+def resolve_lesson_reference(reference: str, catalog: Dict[str, Any]) -> Dict[str, Any]:
     """Resolve a lesson by lesson_id or track-relative path."""
     normalized = str(reference or "").strip()
     if not normalized:
