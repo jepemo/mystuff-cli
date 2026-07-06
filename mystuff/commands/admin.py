@@ -3,9 +3,13 @@
 MyStuff CLI - Administrative curriculum review commands.
 """
 
+import json
+import os
 import shlex
 import subprocess
-import os
+import time
+from datetime import datetime
+from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional
 
 import typer
@@ -22,6 +26,7 @@ from mystuff.learning_catalog import (
 admin_app = typer.Typer(help="Run administrative curriculum review workflows")
 
 REVIEWED_STATUSES = {"reviewed", "exempt"}
+CODEX_STATUS_TAIL_BYTES = 2 * 1024 * 1024
 
 
 def _load_catalog_or_exit() -> Dict[str, Any]:
@@ -150,11 +155,117 @@ def _open_lesson_path(lesson: Dict[str, Any]) -> None:
         raise typer.Exit(exc.returncode)
 
 
+def _get_codex_home() -> Path:
+    return Path(os.environ.get("CODEX_HOME") or Path.home() / ".codex").expanduser()
+
+
+def _recent_session_files(codex_home: Path, started_at: float) -> List[Path]:
+    sessions_dir = codex_home / "sessions"
+    if not sessions_dir.exists():
+        return []
+
+    files = []
+    for path in sessions_dir.rglob("*.jsonl"):
+        try:
+            files.append((path.stat().st_mtime, path))
+        except OSError:
+            continue
+
+    files.sort(key=lambda item: item[0], reverse=True)
+    recent = [path for mtime, path in files if mtime >= started_at - 2]
+    return recent or [path for _, path in files[:8]]
+
+
+def _tail_text(path: Path, max_bytes: int = CODEX_STATUS_TAIL_BYTES) -> str:
+    try:
+        with open(path, "rb") as handle:
+            handle.seek(0, os.SEEK_END)
+            size = handle.tell()
+            handle.seek(max(0, size - max_bytes))
+            return handle.read().decode("utf-8", errors="ignore")
+    except OSError:
+        return ""
+
+
+def _latest_token_count_event(path: Path) -> Optional[Dict[str, Any]]:
+    for line in reversed(_tail_text(path).splitlines()):
+        if "token_count" not in line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if event.get("type") == "event_msg":
+            payload = event.get("payload") or {}
+            if payload.get("type") == "token_count":
+                payload = dict(payload)
+                payload["rate_limits"] = event.get("rate_limits") or {}
+                return payload
+        if event.get("type") == "token_count":
+            return event
+
+    return None
+
+
+def _latest_codex_status(started_at: float) -> Optional[Dict[str, Any]]:
+    for path in _recent_session_files(_get_codex_home(), started_at):
+        event = _latest_token_count_event(path)
+        if event:
+            return event
+    return None
+
+
+def _format_reset_time(value: Any) -> str:
+    try:
+        return datetime.fromtimestamp(int(value)).strftime("%Y-%m-%d %H:%M")
+    except (TypeError, ValueError, OSError, OverflowError):
+        return "unknown"
+
+
+def _format_window(minutes: Any) -> str:
+    try:
+        total_minutes = int(minutes)
+    except (TypeError, ValueError):
+        return ""
+    if total_minutes % 1440 == 0:
+        days = total_minutes // 1440
+        return f"{days}d"
+    if total_minutes % 60 == 0:
+        hours = total_minutes // 60
+        return f"{hours}h"
+    return f"{total_minutes}m"
+
+
+def _print_codex_status(started_at: float) -> None:
+    status = _latest_codex_status(started_at)
+    if not status:
+        typer.echo("Codex status unavailable.")
+        return
+
+    rate_limits = status.get("rate_limits") or {}
+    typer.echo("Codex status:")
+    for label in ("primary", "secondary"):
+        limit = rate_limits.get(label)
+        if not isinstance(limit, dict):
+            continue
+        used_percent = limit.get("used_percent", "unknown")
+        window = _format_window(limit.get("window_minutes"))
+        reset_time = _format_reset_time(limit.get("resets_at"))
+        suffix = f" ({window} window)" if window else ""
+        typer.echo(f"  {label}: {used_percent}% used{suffix}, resets {reset_time}")
+
+    plan_type = rate_limits.get("plan_type")
+    if plan_type:
+        typer.echo(f"  plan: {plan_type}")
+
+
 def _run_codex_prompt(
     prompt: str,
     *,
     codex_command: str,
     dry_run: bool,
+    show_status: bool,
 ) -> None:
     typer.echo(f"▶ {prompt}")
     if dry_run:
@@ -165,12 +276,15 @@ def _run_codex_prompt(
         typer.echo("❌ Empty Codex command.", err=True)
         raise typer.Exit(1)
 
+    started_at = time.time()
     try:
         subprocess.run(
             command + ["exec", prompt],
             cwd=get_mystuff_dir(),
             check=True,
         )
+        if show_status:
+            _print_codex_status(started_at)
     except FileNotFoundError:
         typer.echo(f"❌ Codex command not found: {command[0]}", err=True)
         raise typer.Exit(1)
@@ -248,6 +362,13 @@ def review_track(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print prompts without running Codex")
     ] = False,
+    show_status: Annotated[
+        bool,
+        typer.Option(
+            "--status/--no-status",
+            help="Show best-effort Codex usage status after each prompt",
+        ),
+    ] = True,
 ):
     """Plan/review a track, then ask Codex to review its next lesson."""
     catalog = _load_catalog_or_exit()
@@ -264,11 +385,13 @@ def review_track(
         f"Planifica/revisa el track {track['track_id']}.",
         codex_command=codex_command,
         dry_run=dry_run,
+        show_status=show_status,
     )
     _run_codex_prompt(
         f"Revisa la siguiente leccion del track {track['track_id']}.",
         codex_command=codex_command,
         dry_run=dry_run,
+        show_status=show_status,
     )
 
 
@@ -284,6 +407,13 @@ def review_lesson(
     dry_run: Annotated[
         bool, typer.Option("--dry-run", help="Print prompt without running Codex")
     ] = False,
+    show_status: Annotated[
+        bool,
+        typer.Option(
+            "--status/--no-status",
+            help="Show best-effort Codex usage status after the prompt",
+        ),
+    ] = True,
 ):
     """Ask Codex to review the next lesson of a track already in review."""
     catalog = _load_catalog_or_exit()
@@ -300,4 +430,5 @@ def review_lesson(
         f"Revisa la siguiente leccion del track {track['track_id']}.",
         codex_command=codex_command,
         dry_run=dry_run,
+        show_status=show_status,
     )

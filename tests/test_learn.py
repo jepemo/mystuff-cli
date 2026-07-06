@@ -917,7 +917,7 @@ def test_admin_review_next_finds_pending_lesson(temp_learning_dir):
 
 
 def test_admin_review_track_runs_plan_and_lesson_prompts(
-    temp_learning_dir, monkeypatch
+    temp_learning_dir, tmp_path, monkeypatch
 ):
     create_track(
         temp_learning_dir / "lessons",
@@ -939,9 +939,24 @@ def test_admin_review_track_runs_plan_and_lesson_prompts(
         ],
     )
     calls = []
+    codex_home = tmp_path / "codex-home"
+    session_dir = codex_home / "sessions" / "2026" / "07" / "06"
+    session_dir.mkdir(parents=True)
+    monkeypatch.setenv("CODEX_HOME", str(codex_home))
 
     def fake_run(command, cwd=None, check=False):
         calls.append((command, cwd, check))
+        status_path = session_dir / "rollout-test.jsonl"
+        status_path.write_text(
+            (
+                '{"type":"event_msg","payload":{"type":"token_count"},'
+                '"rate_limits":{"primary":{"used_percent":12.5,'
+                '"window_minutes":300,"resets_at":1783350000},'
+                '"secondary":{"used_percent":84.0,"window_minutes":10080,'
+                '"resets_at":1783600000},"plan_type":"plus"}}\n'
+            ),
+            encoding="utf-8",
+        )
 
     monkeypatch.setattr(admin_command.subprocess, "run", fake_run)
     runner = CliRunner()
@@ -975,6 +990,10 @@ def test_admin_review_track_runs_plan_and_lesson_prompts(
             True,
         ),
     ]
+    assert result.output.count("Codex status:") == 2
+    assert "primary: 12.5% used (5h window)" in result.output
+    assert "secondary: 84.0% used (7d window)" in result.output
+    assert "plan: plus" in result.output
 
 
 def test_admin_review_lesson_selects_track_in_review(temp_learning_dir):
