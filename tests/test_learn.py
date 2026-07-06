@@ -46,6 +46,7 @@ def create_track(
     status: str,
     lessons: list[dict],
     public: bool = True,
+    track_metadata: dict = None,
 ) -> None:
     track_dir = lessons_dir / track_id
     track_dir.mkdir(parents=True)
@@ -66,6 +67,8 @@ def create_track(
         "capstone_policy": "embedded",
         "legacy_source_ranges": ["001-010"],
     }
+    if track_metadata:
+        track_frontmatter.update(track_metadata)
     write_markdown_with_frontmatter(
         track_dir / "TRACK.md",
         track_frontmatter,
@@ -228,6 +231,70 @@ def test_get_all_lessons_discovers_track_layout_only(temp_learning_dir):
     assert [lesson["lesson_id"] for lesson in lessons] == ["100", "101", "200", "201"]
     assert all(lesson["path"].count("/") == 1 for lesson in lessons)
     assert "README.md" not in {lesson["path"] for lesson in lessons}
+
+
+def test_load_learning_catalog_parses_track_metadata(temp_learning_dir):
+    lessons_dir = get_lessons_dir()
+    create_track(
+        lessons_dir,
+        "metadata-track",
+        name="Metadata Track",
+        description="Metadata-rich track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Metadata Intro",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+        track_metadata={
+            "macro_area": "software-systems",
+            "track_type": "foundations",
+            "learning_role": "core",
+            "canonical_question": "How do these metadata fields guide learning?",
+            "scope": {
+                "includes": ["navigation signals", "editorial scope"],
+                "excludes": "deep specialization",
+            },
+            "continues_to": "systems",
+            "related_tracks": [
+                {"id": "foundations", "relationship": "prepares"},
+                "systems",
+            ],
+            "tags": ["metadata", "navigation"],
+            "needs_metadata_review": "yes",
+        },
+    )
+
+    catalog = load_learning_catalog()
+    track = catalog["tracks_by_id"]["metadata-track"]
+    foundations = catalog["tracks_by_id"]["foundations"]
+
+    assert track["macro_area"] == "software-systems"
+    assert track["track_type"] == "foundations"
+    assert track["learning_role"] == "core"
+    assert track["canonical_question"] == "How do these metadata fields guide learning?"
+    assert track["scope"] == {
+        "includes": ["navigation signals", "editorial scope"],
+        "excludes": ["deep specialization"],
+    }
+    assert track["continues_to"] == ["systems"]
+    assert track["related_tracks"] == [
+        {"id": "foundations", "relationship": "prepares"},
+        {"id": "systems", "relationship": ""},
+    ]
+    assert track["tags"] == ["metadata", "navigation"]
+    assert track["needs_metadata_review"] is True
+    assert foundations["scope"] == {"includes": [], "excludes": []}
+    assert foundations["continues_to"] == []
+    assert foundations["related_tracks"] == []
+    assert foundations["tags"] == []
+    assert foundations["needs_metadata_review"] is False
 
 
 def test_get_next_lesson_wraps_within_track(temp_learning_dir):
@@ -555,6 +622,100 @@ def test_next_finishes_track_and_suggests_unlocked_tracks(temp_learning_dir):
     assert reloaded["current_lesson_ids_by_track"] == {}
     assert "Track completed: foundations" in result.output
     assert "systems" in result.output
+
+
+def test_next_prefers_valid_continues_to_suggestions(temp_learning_dir):
+    lessons_dir = get_lessons_dir()
+    foundations_path = lessons_dir / "foundations" / "TRACK.md"
+    foundations_text = foundations_path.read_text(encoding="utf-8")
+    foundations_path.write_text(
+        foundations_text.replace(
+            "legacy_source_ranges:\n- 001-010\n",
+            (
+                "legacy_source_ranges:\n"
+                "- 001-010\n"
+                "continues_to:\n"
+                "- blocked-next\n"
+                "- systems\n"
+                "- private-next\n"
+            ),
+        ),
+        encoding="utf-8",
+    )
+    create_track(
+        lessons_dir,
+        "practice",
+        name="Practice",
+        description="A valid fallback track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Practice Intro",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    create_track(
+        lessons_dir,
+        "blocked-next",
+        name="Blocked Next",
+        description="Locked continuation.",
+        classification="systems-thinking",
+        depends_on_tracks=["missing-prereq"],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "400",
+                "sequence": 1,
+                "title": "Blocked Intro",
+                "legacy_day": 400,
+                "legacy_path": "40/01.md",
+            }
+        ],
+    )
+    create_track(
+        lessons_dir,
+        "private-next",
+        name="Private Next",
+        description="Private continuation.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        public=False,
+        lessons=[
+            {
+                "lesson_id": "500",
+                "sequence": 1,
+                "title": "Private Intro",
+                "legacy_day": 500,
+                "legacy_path": "50/01.md",
+            }
+        ],
+    )
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "101",
+            "last_opened_at": datetime.datetime.now().isoformat(),
+            "completed_lessons": [
+                {"lesson_id": "100", "completed_at": "2026-04-01T09:00:00"}
+            ],
+        }
+    )
+
+    runner = CliRunner()
+    result = runner.invoke(app, ["learn", "next"], input="1\n")
+
+    assert result.exit_code == 0
+    assert "systems: Systems" in result.output
+    assert "practice" not in result.output
+    assert "blocked-next" not in result.output
+    assert "private-next" not in result.output
 
 
 def test_list_track_hides_private_lessons_by_default(temp_learning_dir):

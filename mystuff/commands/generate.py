@@ -474,6 +474,31 @@ def _public_lesson_status(
     return "todo"
 
 
+def _attach_track_continuation_links(tracks: List[Dict[str, Any]]) -> None:
+    tracks_by_id = {track["track_id"]: track for track in tracks}
+    for track in tracks:
+        continuation_tracks = []
+        for track_id in track.get("continues_to", []):
+            target = tracks_by_id.get(track_id)
+            if target:
+                continuation_tracks.append(
+                    {
+                        "track_id": target["track_id"],
+                        "name": target["name"],
+                        "url": (
+                            f"{target['track_id']}.html"
+                            if target.get("is_published")
+                            else None
+                        ),
+                    }
+                )
+            else:
+                continuation_tracks.append(
+                    {"track_id": track_id, "name": track_id, "url": None}
+                )
+        track["continuation_tracks"] = continuation_tracks
+
+
 def load_learning_data() -> Optional[Dict[str, Any]]:
     """Load current published learning state for the home page."""
     try:
@@ -637,6 +662,7 @@ def load_all_tracks_with_status() -> List[Dict[str, Any]]:
         track_copy["public_progress_status"] = public_progress_status
         tracks.append(track_copy)
 
+    _attach_track_continuation_links(tracks)
     return tracks
 
 

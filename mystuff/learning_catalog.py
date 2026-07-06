@@ -153,6 +153,37 @@ def _normalize_bool(value: Any, default: bool = False) -> bool:
     return default
 
 
+def _normalize_scope(value: Any) -> Dict[str, List[str]]:
+    if not isinstance(value, dict):
+        return {"includes": [], "excludes": []}
+
+    return {
+        "includes": _normalize_string_list(value.get("includes")),
+        "excludes": _normalize_string_list(value.get("excludes")),
+    }
+
+
+def _normalize_related_tracks(value: Any) -> List[Dict[str, str]]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        value = [value]
+
+    related_tracks: List[Dict[str, str]] = []
+    for item in value:
+        if isinstance(item, dict):
+            track_id = str(item.get("id") or item.get("track_id") or "").strip()
+            relationship = str(item.get("relationship") or "").strip()
+        else:
+            track_id = str(item or "").strip()
+            relationship = ""
+
+        if track_id:
+            related_tracks.append({"id": track_id, "relationship": relationship})
+
+    return related_tracks
+
+
 def _humanize_slug(value: str) -> str:
     return str(value or "").replace("-", " ").strip().title()
 
@@ -333,6 +364,18 @@ def _load_track(track_dir: Path, lessons_dir: Path) -> Dict[str, Any]:
         "lesson_count": actual_lesson_count,
         "difficulty_min": str(frontmatter.get("difficulty_min") or "").strip() or None,
         "difficulty_max": str(frontmatter.get("difficulty_max") or "").strip() or None,
+        "macro_area": str(frontmatter.get("macro_area") or "").strip() or None,
+        "track_type": str(frontmatter.get("track_type") or "").strip() or None,
+        "learning_role": str(frontmatter.get("learning_role") or "").strip() or None,
+        "canonical_question": str(frontmatter.get("canonical_question") or "").strip()
+        or None,
+        "scope": _normalize_scope(frontmatter.get("scope")),
+        "continues_to": _normalize_string_list(frontmatter.get("continues_to")),
+        "related_tracks": _normalize_related_tracks(frontmatter.get("related_tracks")),
+        "tags": _normalize_string_list(frontmatter.get("tags")),
+        "needs_metadata_review": _normalize_bool(
+            frontmatter.get("needs_metadata_review"), default=False
+        ),
         "capstone_policy": str(frontmatter.get("capstone_policy") or "").strip()
         or None,
         "legacy_source_ranges": _normalize_string_list(

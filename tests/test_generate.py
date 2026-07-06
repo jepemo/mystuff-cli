@@ -45,6 +45,7 @@ def create_track(
     lessons: list[dict],
     public: bool = True,
     roadmap: Optional[str] = None,
+    track_metadata: Optional[dict] = None,
 ) -> None:
     track_dir = lessons_dir / track_id
     track_dir.mkdir(parents=True)
@@ -66,6 +67,8 @@ def create_track(
         "capstone_policy": "embedded",
         "legacy_source_ranges": ["001-010"],
     }
+    if track_metadata:
+        track_frontmatter.update(track_metadata)
     write_markdown_with_frontmatter(
         track_dir / "TRACK.md",
         track_frontmatter,
@@ -146,6 +149,19 @@ def sample_learning(temp_mystuff_dir):
         classification="systems-thinking",
         depends_on_tracks=[],
         status="active",
+        track_metadata={
+            "macro_area": "software-systems",
+            "track_type": "foundations",
+            "learning_role": "core",
+            "canonical_question": "How do systems concepts become usable habits?",
+            "scope": {
+                "includes": ["core vocabulary", "small system models"],
+                "excludes": ["deep distributed algorithms"],
+            },
+            "continues_to": ["systems", "private-api"],
+            "tags": ["systems", "foundations", "models"],
+            "needs_metadata_review": True,
+        },
         lessons=[
             {
                 "lesson_id": "100",
@@ -583,6 +599,8 @@ def test_learning_template_includes_switchable_tracks_view(
     assert "Systems Thinking" in html_content
     assert "Distributed Systems" in html_content
     assert "Core concepts." in html_content
+    assert 'class="inline-badge compact-track-badge">foundations</span>' in html_content
+    assert 'class="inline-badge compact-track-badge">core</span>' in html_content
     assert "lessons across this classification" not in html_content
     assert "lessons across this roadmap" not in html_content
     assert (
@@ -706,6 +724,8 @@ def test_classification_template_uses_compact_track_list(
     assert 'href="../tracks/foundations.html">Foundations' in html_content
     assert 'href="../classifications/systems-thinking.html"' in html_content
     assert "Core concepts." in html_content
+    assert 'class="inline-badge compact-track-badge">foundations</span>' in html_content
+    assert 'class="inline-badge compact-track-badge">core</span>' in html_content
     assert "Private API" in html_content
     assert 'class="compact-track-row compact-track-row-unpublished"' in html_content
     assert 'class="unpublished-track-name">Private API</span>' in html_content
@@ -903,6 +923,17 @@ def test_track_template_omits_lesson_minutes(
     html_content = (temp_output_dir / "track.html").read_text(encoding="utf-8")
 
     assert "Intro to Foundations" in html_content
+    assert "LEARNING METADATA" in html_content
+    assert "How do systems concepts become usable habits?" in html_content
+    assert "foundations" in html_content
+    assert "core" in html_content
+    assert "software-systems" in html_content
+    assert "core vocabulary" in html_content
+    assert "deep distributed algorithms" in html_content
+    assert 'href="systems.html">Systems</a>' in html_content
+    assert 'class="unpublished-track-name">Private API</span>' in html_content
+    assert 'href="private-api.html"' not in html_content
+    assert "needs_metadata_review" not in html_content
     assert "lesson-syllabus-meta" not in html_content
     assert "20 min" not in html_content
 

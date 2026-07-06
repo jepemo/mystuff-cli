@@ -85,6 +85,12 @@
       </h2>
       <p class="compact-track-classification">
         <a href="{{ classification.url }}">{{ classification.classification_name }}</a>
+        {% if track.track_type or track.learning_role %}
+        <span class="compact-track-badges">
+          {% if track.track_type %}<span class="inline-badge compact-track-badge">{{ track.track_type|replace('_', ' ') }}</span>{% endif %}
+          {% if track.learning_role %}<span class="inline-badge compact-track-badge">{{ track.learning_role|replace('_', ' ') }}</span>{% endif %}
+        </span>
+        {% endif %}
       </p>
       <p class="compact-track-description">
         {% if track.description %}{{ track.description }}{% else %}-{% endif %}

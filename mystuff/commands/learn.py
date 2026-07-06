@@ -1047,13 +1047,26 @@ def _suggest_unlocked_tracks(
 ) -> List[Dict[str, Any]]:
     catalog = _attach_progress_or_exit(catalog, metadata)
     completed_ids = get_completed_lesson_ids(metadata)
-    return [
+    candidates = [
         track
         for track in catalog["tracks"]
         if _is_startable_track(track)
         and track["track_id"] != exclude_track_id
         and not is_track_completed(track, completed_ids)
     ]
+    candidates_by_id = {track["track_id"]: track for track in candidates}
+
+    source_track = catalog.get("tracks_by_id", {}).get(exclude_track_id)
+    continuation_ids = source_track.get("continues_to", []) if source_track else []
+    continuation_tracks = [
+        candidates_by_id[track_id]
+        for track_id in continuation_ids
+        if track_id in candidates_by_id
+    ]
+    if continuation_tracks:
+        return continuation_tracks
+
+    return candidates
 
 
 def _print_track_suggestions(tracks: List[Dict[str, Any]]) -> None:
