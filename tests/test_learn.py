@@ -8,6 +8,7 @@ import pytest
 import yaml
 from typer.testing import CliRunner
 
+import mystuff.commands.admin as admin_command
 import mystuff.commands.learn as learn_command
 from mystuff.cli import app
 from mystuff.commands.learn import (
@@ -886,18 +887,207 @@ def test_publish_track_updates_public_frontmatter(temp_learning_dir):
     assert "public: true" in track_path.read_text(encoding="utf-8")
 
 
-def test_review_next_finds_pending_lesson(temp_learning_dir):
-    lesson_path = temp_learning_dir / "lessons" / "systems" / "001.md"
-    lesson_path.write_text(
-        lesson_path.read_text(encoding="utf-8").replace(
-            "review_status: reviewed", "review_status: pending"
-        ),
-        encoding="utf-8",
+def test_admin_review_next_finds_pending_lesson(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "draft-review",
+        name="Draft Review",
+        description="Draft review track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Draft Lesson",
+                "review_status": "pending",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["learn", "review-next"])
+    result = runner.invoke(app, ["admin", "review-next"])
 
     assert result.exit_code == 0
-    assert "systems/001" in result.output
-    assert "Distributed Reads" in result.output
+    assert "draft-review/001" in result.output
+    assert "Draft Lesson" in result.output
+
+
+def test_admin_review_track_runs_plan_and_lesson_prompts(
+    temp_learning_dir, monkeypatch
+):
+    create_track(
+        temp_learning_dir / "lessons",
+        "draft-review",
+        name="Draft Review",
+        description="Draft review track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Draft Lesson",
+                "review_status": "pending",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    calls = []
+
+    def fake_run(command, cwd=None, check=False):
+        calls.append((command, cwd, check))
+
+    monkeypatch.setattr(admin_command.subprocess, "run", fake_run)
+    runner = CliRunner()
+
+    result = runner.invoke(
+        app,
+        [
+            "admin",
+            "review-track",
+            "--track-id",
+            "draft-review",
+            "--codex-command",
+            "fake-codex",
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert calls == [
+        (
+            ["fake-codex", "exec", "Planifica/revisa el track draft-review."],
+            temp_learning_dir.parent,
+            True,
+        ),
+        (
+            [
+                "fake-codex",
+                "exec",
+                "Revisa la siguiente leccion del track draft-review.",
+            ],
+            temp_learning_dir.parent,
+            True,
+        ),
+    ]
+
+
+def test_admin_review_lesson_selects_track_in_review(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "unstarted-draft",
+        name="Unstarted Draft",
+        description="No reviewed lessons yet.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Unstarted Lesson",
+                "review_status": "pending",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    create_track(
+        temp_learning_dir / "lessons",
+        "draft-in-review",
+        name="Draft In Review",
+        description="Partially reviewed track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        lessons=[
+            {
+                "lesson_id": "400",
+                "sequence": 1,
+                "title": "Reviewed Lesson",
+                "review_status": "reviewed",
+                "legacy_day": 400,
+                "legacy_path": "40/01.md",
+            },
+            {
+                "lesson_id": "401",
+                "sequence": 2,
+                "title": "Pending Lesson",
+                "review_status": "pending",
+                "legacy_day": 401,
+                "legacy_path": "40/02.md",
+            },
+        ],
+    )
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["admin", "review-lesson", "--dry-run"])
+
+    assert result.exit_code == 0
+    assert "Revisa la siguiente leccion del track draft-in-review." in result.output
+    assert "unstarted-draft" not in result.output
+
+
+def test_admin_show_tracks_review_queues(temp_learning_dir):
+    create_track(
+        temp_learning_dir / "lessons",
+        "unstarted-draft",
+        name="Unstarted Draft",
+        description="No reviewed lessons yet.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Unstarted Lesson",
+                "review_status": "pending",
+                "legacy_day": 300,
+                "legacy_path": "30/01.md",
+            }
+        ],
+    )
+    create_track(
+        temp_learning_dir / "lessons",
+        "draft-in-review",
+        name="Draft In Review",
+        description="Partially reviewed track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        lessons=[
+            {
+                "lesson_id": "400",
+                "sequence": 1,
+                "title": "Reviewed Lesson",
+                "review_status": "reviewed",
+                "legacy_day": 400,
+                "legacy_path": "40/01.md",
+            },
+            {
+                "lesson_id": "401",
+                "sequence": 2,
+                "title": "Pending Lesson",
+                "review_status": "pending",
+                "legacy_day": 401,
+                "legacy_path": "40/02.md",
+            },
+        ],
+    )
+    runner = CliRunner()
+
+    pending = runner.invoke(app, ["admin", "show-tracks-pending-review"])
+    in_review = runner.invoke(app, ["admin", "show-tracks-in-review"])
+
+    assert pending.exit_code == 0
+    assert "unstarted-draft" in pending.output
+    assert "draft-in-review" not in pending.output
+    assert in_review.exit_code == 0
+    assert "draft-in-review" in in_review.output
+    assert "unstarted-draft" not in in_review.output

@@ -7,6 +7,7 @@ from typing import Annotated
 
 import typer
 
+from mystuff.commands.admin import admin_app
 from mystuff.commands.eval import eval_app
 from mystuff.commands.generate import generate_app
 from mystuff.commands.init import init
@@ -53,6 +54,9 @@ app.add_typer(sync_app, name="sync")
 
 # Add the generate command group
 app.add_typer(generate_app, name="generate")
+
+# Add the admin command group
+app.add_typer(admin_app, name="admin")
 
 
 @app.callback(invoke_without_command=True)

@@ -1665,60 +1665,6 @@ def unpublish_content(
     _set_public(reference, False)
 
 
-@learn_app.command("review-next")
-def review_next_lesson(
-    track: Annotated[
-        Optional[str],
-        typer.Option("--track", help="Limit the review queue to one track"),
-    ] = None,
-    include_drafts: Annotated[
-        bool, typer.Option("--include-drafts", help="Include draft tracks")
-    ] = False,
-    open_lesson: Annotated[
-        bool, typer.Option("--open", help="Open the next pending lesson")
-    ] = False,
-):
-    """Show the next lesson that still needs editorial review."""
-    catalog = _load_catalog_or_exit()
-
-    if track:
-        try:
-            tracks = [resolve_track_reference(track, catalog)]
-        except LearningReferenceError as exc:
-            typer.echo(f"❌ {exc}", err=True)
-            raise typer.Exit(1)
-    else:
-        tracks = _visible_tracks(catalog, include_drafts=include_drafts)
-
-    pending_lessons = [
-        lesson
-        for track_item in tracks
-        for lesson in track_item["lessons"]
-        if (lesson.get("review_status") or "pending") not in {"reviewed", "exempt"}
-    ]
-
-    if not pending_lessons:
-        typer.echo("✅ No pending lessons found for review.")
-        return
-
-    pending_lessons.sort(
-        key=lambda lesson: (
-            lesson.get("legacy_day") if lesson.get("legacy_day") is not None else 10**9,
-            lesson["track_id"],
-            lesson["sequence"],
-        )
-    )
-    lesson = pending_lessons[0]
-    typer.echo(
-        f"📝 Next review: {lesson['track_id']}/{lesson['sequence_label']} "
-        f"[{lesson['lesson_id']}] - {lesson['title']}"
-    )
-    typer.echo(f"Path: {get_lessons_dir() / lesson['path']}")
-
-    if open_lesson:
-        _open_lesson_path(lesson)
-
-
 @learn_app.command("current")
 def open_current_lesson(
     reference: Annotated[
