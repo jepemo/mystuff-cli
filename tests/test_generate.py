@@ -578,6 +578,8 @@ def test_learning_template_includes_switchable_tracks_view(
     assert "compact-track-row" in html_content
     assert "Foundations" in html_content
     assert "Private API" in html_content
+    assert 'class="compact-track-row compact-track-row-unpublished"' in html_content
+    assert 'class="unpublished-track-name">Private API</span>' in html_content
     assert "Systems Thinking" in html_content
     assert "Distributed Systems" in html_content
     assert "Core concepts." in html_content
@@ -656,6 +658,7 @@ def test_learning_template_lists_multiple_current_lessons(
     assert "Capstone Foundations" in html_content
     assert "Core concepts." in html_content
     assert "Systems" in html_content
+    assert 'class="unpublished-track-name">Systems</span>' in html_content
     assert "Distributed Reads" in html_content
     assert "Distributed systems." in html_content
     assert "Open current lesson" not in html_content
@@ -704,6 +707,8 @@ def test_classification_template_uses_compact_track_list(
     assert 'href="../classifications/systems-thinking.html"' in html_content
     assert "Core concepts." in html_content
     assert "Private API" in html_content
+    assert 'class="compact-track-row compact-track-row-unpublished"' in html_content
+    assert 'class="unpublished-track-name">Private API</span>' in html_content
     assert 'href="../tracks/private-api.html"' not in html_content
     assert " tracks / " not in html_content
     assert " lessons" not in html_content
@@ -757,6 +762,44 @@ def test_roadmap_template_uses_compact_track_list(
     assert "Open track" not in html_content
     assert "status-badge" not in html_content
     assert "track-row-" not in html_content
+
+
+def test_roadmap_template_marks_unpublished_track_rows(
+    sample_learning, sample_config, temp_output_dir
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": None,
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    tracks = load_all_tracks_with_status()
+    roadmap = group_tracks_by_roadmap(tracks)[2]
+    temp_output_dir.mkdir(parents=True, exist_ok=True)
+
+    render_template(
+        "roadmap.html",
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+            "roadmap": roadmap,
+            "tracks": roadmap["tracks"],
+            "relative_root": "../",
+            "generated_at": "2026-04-02",
+        },
+        temp_output_dir / "roadmap.html",
+    )
+
+    html_content = (temp_output_dir / "roadmap.html").read_text(encoding="utf-8")
+
+    assert 'class="compact-track-row compact-track-row-unpublished"' in html_content
+    assert 'class="unpublished-track-name">Private API</span>' in html_content
+    assert 'href="../tracks/private-api.html"' not in html_content
 
 
 def test_index_template_omits_current_learning_card(
