@@ -18,90 +18,19 @@
   {% if track.description %}
   <p>{{ track.description }}</p>
   {% endif %}
-  <p>{{ track.public_lesson_count }} lessons</p>
-</section>
-
-{% set has_scope = track.scope and (track.scope.includes or track.scope.excludes) %}
-{% set has_metadata = track.canonical_question or track.track_type or track.learning_role or track.macro_area or has_scope or track.continuation_tracks or track.tags %}
-{% if has_metadata %}
-<section class="stack-block track-metadata">
-  <p class="page-kicker">LEARNING METADATA</p>
   {% if track.canonical_question %}
   <p class="track-canonical-question">{{ track.canonical_question }}</p>
   {% endif %}
-
-  {% if track.track_type or track.learning_role or track.macro_area %}
-  <dl class="track-metadata-list">
-    {% if track.track_type %}
-    <div>
-      <dt>Type</dt>
-      <dd>{{ track.track_type|replace('_', ' ') }}</dd>
-    </div>
-    {% endif %}
-    {% if track.learning_role %}
-    <div>
-      <dt>Role</dt>
-      <dd>{{ track.learning_role|replace('_', ' ') }}</dd>
-    </div>
-    {% endif %}
-    {% if track.macro_area %}
-    <div>
-      <dt>Macro area</dt>
-      <dd>{{ track.macro_area|replace('_', ' ') }}</dd>
-    </div>
-    {% endif %}
-  </dl>
-  {% endif %}
-
-  {% if has_scope %}
-  <div class="track-scope-grid">
-    {% if track.scope.includes %}
-    <div>
-      <p class="meta">Includes</p>
-      <ul class="track-metadata-items">
-        {% for item in track.scope.includes %}
-        <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-    {% if track.scope.excludes %}
-    <div>
-      <p class="meta">Excludes</p>
-      <ul class="track-metadata-items">
-        {% for item in track.scope.excludes %}
-        <li>{{ item }}</li>
-        {% endfor %}
-      </ul>
-    </div>
-    {% endif %}
-  </div>
-  {% endif %}
-
+  <p>{{ track.public_lesson_count }} lessons</p>
   {% if track.continuation_tracks %}
-  <div class="track-metadata-group">
-    <p class="meta">Continues to</p>
-    <ul class="track-link-list">
-      {% for continuation in track.continuation_tracks %}
-      <li>
-        {% if continuation.url %}<a href="{{ continuation.url }}">{{ continuation.name }}</a>{% else %}<span class="unpublished-track-name">{{ continuation.name }}</span>{% endif %}
-      </li>
-      {% endfor %}
-    </ul>
-  </div>
-  {% endif %}
-
-  {% if track.tags %}
-  <p class="track-tag-list">
-    {% for tag in track.tags %}
-    {% if loop.index <= 6 %}
-    <span class="inline-badge compact-track-badge">{{ tag }}</span>
-    {% endif %}
+  <p class="track-continuations">
+    <span class="meta">Continues to</span>
+    {% for continuation in track.continuation_tracks %}
+    {% if continuation.url %}<a href="{{ continuation.url }}">{{ continuation.name }}</a>{% else %}<span class="unpublished-track-name">{{ continuation.name }}</span>{% endif %}{% if not loop.last %}<span class="track-continuation-separator">/</span>{% endif %}
     {% endfor %}
   </p>
   {% endif %}
 </section>
-{% endif %}
 
 <section class="stack-block">
   <p class="page-kicker">LESSONS</p>

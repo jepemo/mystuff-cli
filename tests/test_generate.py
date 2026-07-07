@@ -599,8 +599,7 @@ def test_learning_template_includes_switchable_tracks_view(
     assert "Systems Thinking" in html_content
     assert "Distributed Systems" in html_content
     assert "Core concepts." in html_content
-    assert 'class="inline-badge compact-track-badge">foundations</span>' in html_content
-    assert 'class="inline-badge compact-track-badge">core</span>' in html_content
+    assert "compact-track-badge" not in html_content
     assert "lessons across this classification" not in html_content
     assert "lessons across this roadmap" not in html_content
     assert (
@@ -724,8 +723,7 @@ def test_classification_template_uses_compact_track_list(
     assert 'href="../tracks/foundations.html">Foundations' in html_content
     assert 'href="../classifications/systems-thinking.html"' in html_content
     assert "Core concepts." in html_content
-    assert 'class="inline-badge compact-track-badge">foundations</span>' in html_content
-    assert 'class="inline-badge compact-track-badge">core</span>' in html_content
+    assert "compact-track-badge" not in html_content
     assert "Private API" in html_content
     assert 'class="compact-track-row compact-track-row-unpublished"' in html_content
     assert 'class="unpublished-track-name">Private API</span>' in html_content
@@ -923,13 +921,19 @@ def test_track_template_omits_lesson_minutes(
     html_content = (temp_output_dir / "track.html").read_text(encoding="utf-8")
 
     assert "Intro to Foundations" in html_content
-    assert "LEARNING METADATA" in html_content
+    assert "LEARNING METADATA" not in html_content
     assert "How do systems concepts become usable habits?" in html_content
-    assert "foundations" in html_content
-    assert "core" in html_content
-    assert "software-systems" in html_content
-    assert "core vocabulary" in html_content
-    assert "deep distributed algorithms" in html_content
+    assert "Type" not in html_content
+    assert "Role" not in html_content
+    assert "Macro area" not in html_content
+    assert "software-systems" not in html_content
+    assert "Includes" not in html_content
+    assert "Excludes" not in html_content
+    assert "core vocabulary" not in html_content
+    assert "deep distributed algorithms" not in html_content
+    assert "systems</span>" not in html_content
+    assert "models</span>" not in html_content
+    assert "Continues to" in html_content
     assert 'href="systems.html">Systems</a>' in html_content
     assert 'class="unpublished-track-name">Private API</span>' in html_content
     assert 'href="private-api.html"' not in html_content
