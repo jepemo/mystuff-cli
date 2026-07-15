@@ -867,6 +867,25 @@ def test_convert_markdown_to_html_renders_generated_quote_list(temp_learning_dir
     Path(html_path).unlink()
 
 
+def test_convert_markdown_to_html_preserves_and_loads_tex_math(temp_learning_dir):
+    lessons_dir = temp_learning_dir / "lessons" / "scratch"
+    lessons_dir.mkdir()
+    lesson_file = lessons_dir / "math.md"
+    lesson_file.write_text(
+        "Inline \\(P(X)=1\\).\n\n\\[\n\\Omega = \\{A, TA, TT\\}\n\\]\n",
+        encoding="utf-8",
+    )
+
+    html_path = convert_markdown_to_html(lesson_file)
+    html_content = Path(html_path).read_text(encoding="utf-8")
+
+    assert 'class="math-inline">\\(P(X)=1\\)</span>' in html_content
+    assert 'class="math-display">\\[' in html_content
+    assert "\\Omega = \\{A, TA, TT\\}" in html_content
+    assert "https://cdn.jsdelivr.net/npm/mathjax@4.0.0/tex-chtml.js" in html_content
+    Path(html_path).unlink()
+
+
 def test_unpublish_lesson_updates_public_frontmatter(temp_learning_dir):
     runner = CliRunner()
 

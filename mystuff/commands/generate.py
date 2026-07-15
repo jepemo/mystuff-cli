@@ -27,7 +27,11 @@ from mystuff.learning_catalog import (
     load_learning_catalog,
     load_metadata,
 )
-from mystuff.markdown_utils import normalize_lesson_markdown
+from mystuff.markdown_utils import (
+    MATHJAX_SCRIPT_URL,
+    LessonMathExtension,
+    normalize_lesson_markdown,
+)
 
 console = Console()
 
@@ -847,6 +851,7 @@ def _render_lesson_markdown(
             "fenced_code",
             "tables",
             "codehilite",
+            LessonMathExtension(),
             LessonLinkRewriteExtension(
                 source_lesson_path=Path(lesson["path"]),
                 known_lesson_paths=known_lesson_paths,
@@ -998,6 +1003,7 @@ def generate_lesson_pages(
         track_lessons = track["lessons"]
         for index, lesson in enumerate(track_lessons):
             lesson_html = _render_lesson_markdown(lesson, known_lesson_paths)
+            has_math = 'class="math-' in lesson_html
             prev_lesson_data = track_lessons[index - 1] if index > 0 else None
             next_lesson_data = (
                 track_lessons[index + 1] if index < len(track_lessons) - 1 else None
@@ -1039,6 +1045,7 @@ def generate_lesson_pages(
                 },
                 "lesson_title": lesson["title"],
                 "lesson_content": lesson_html,
+                "mathjax_url": MATHJAX_SCRIPT_URL if has_math else None,
                 "prev_lesson": prev_lesson,
                 "next_lesson": next_lesson,
                 "track_page_url": f"{relative_root}tracks/{track['track_id']}.html",

@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 
 {% block page_title %}{{ lesson_title }} - @{{ author }}{% endblock %}
+{% block head_extra %}
+{% if mathjax_url %}<script defer src="{{ mathjax_url }}"></script>{% endif %}
+{% endblock %}
 {% block main_class %}lesson-page{% endblock %}
 {% block body_attributes %} class="lesson-reading"{% endblock %}
 {% block header_actions %}

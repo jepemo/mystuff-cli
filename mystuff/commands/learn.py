@@ -45,7 +45,11 @@ from mystuff.learning_catalog import (
     save_metadata,
     track_status_summary,
 )
-from mystuff.markdown_utils import normalize_lesson_markdown
+from mystuff.markdown_utils import (
+    MATHJAX_SCRIPT_URL,
+    LessonMathExtension,
+    normalize_lesson_markdown,
+)
 
 learn_app = typer.Typer(help="Manage learning tracks and progress")
 
@@ -653,8 +657,13 @@ def convert_markdown_to_html(markdown_path: Path, theme: str = "default") -> str
         md_content = f.read()
 
     # Convert markdown to HTML
-    md = markdown.Markdown(extensions=["fenced_code", "tables", "codehilite"])
+    md = markdown.Markdown(
+        extensions=["fenced_code", "tables", "codehilite", LessonMathExtension()]
+    )
     html_content = md.convert(normalize_lesson_markdown(md_content))
+    mathjax_script = ""
+    if 'class="math-' in html_content:
+        mathjax_script = f'    <script defer src="{MATHJAX_SCRIPT_URL}"></script>\n'
 
     # Get CSS for selected theme
     css_content = get_css_theme(theme)
@@ -666,7 +675,7 @@ def convert_markdown_to_html(markdown_path: Path, theme: str = "default") -> str
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{markdown_path.name}</title>
-    <style>
+{mathjax_script}    <style>
 {css_content}
     </style>
 </head>

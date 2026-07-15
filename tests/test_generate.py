@@ -1081,6 +1081,45 @@ def test_generate_lesson_pages_renders_generated_quote_list(
     assert "identify the participants;" in html_content
 
 
+def test_generate_lesson_pages_preserves_and_loads_tex_math(
+    sample_learning, sample_config, temp_output_dir, tmp_path, monkeypatch
+):
+    lesson_path = sample_learning / "lessons" / "foundations" / "001.md"
+    lesson_path.write_text(
+        lesson_path.read_text(encoding="utf-8")
+        + "\nInline \\(P(X \\leq 1)=0.8\\).\n\n"
+        + "\\[\n\\Omega = \\{A, TA, TT\\}\n\\]\n\n"
+        + "```text\n\\[not math\\]\n```\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(
+        "mystuff.commands.generate.get_templates_dir",
+        lambda: Path(__file__).resolve().parents[1] / "mystuff/templates",
+    )
+
+    temp_output_dir.mkdir()
+    generate_lesson_pages(
+        temp_output_dir,
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+        },
+        "2026-04-02",
+    )
+
+    html_content = (temp_output_dir / "lessons" / "foundations" / "001.html").read_text(
+        encoding="utf-8"
+    )
+    assert 'class="math-inline">\\(P(X \\leq 1)=0.8\\)</span>' in html_content
+    assert 'class="math-display">\\[' in html_content
+    assert "\\Omega = \\{A, TA, TT\\}" in html_content
+    assert "https://cdn.jsdelivr.net/npm/mathjax@4.0.0/tex-chtml.js" in html_content
+    assert "<code>\\[not math\\]" in html_content
+
+
 def test_generate_static_web_creates_track_and_lesson_pages(
     sample_learning, sample_config, temp_output_dir, tmp_path, monkeypatch
 ):
