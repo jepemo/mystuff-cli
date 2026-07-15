@@ -264,11 +264,75 @@ mystuff journal edit [OPTIONS]
 
 ### `mystuff wiki`
 
-Manage topical notes with backlinks.
+Capture sources and compound them into an audited, interconnected wiki.
+
+#### `mystuff wiki ingest`
+
+Capture a URL into immutable raw storage and ask the configured agent to
+synthesize or update wiki pages.
+
+```bash
+mystuff wiki ingest [OPTIONS] URL
+```
+
+**Options:**
+
+- `--capture-only`: Download and normalize the source without running the agent.
+- `--dry-run`: Generate and validate the structured change set without applying it.
+- `--reprocess`: Run synthesis again when an identical capture is already processed.
+- `--codex-command TEXT`: Override the configured Codex executable for this run.
+
+#### `mystuff wiki process`
+
+Process an existing immutable capture by the source id shown by `wiki status`,
+without downloading it again. It accepts `--dry-run`, `--reprocess`, and
+`--codex-command`.
+
+#### `mystuff wiki process-batch`
+
+Process several related source ids in one synthesis run. This is preferable for
+small legacy notes that belong to the same topic because page boundaries and
+links are decided together.
+
+#### `mystuff wiki status`
+
+List captured source ids and their `pending`, `processed`, or `error` state.
+
+#### `mystuff wiki audit`
+
+Validate frontmatter, sources, links, aliases, public/private boundaries,
+staleness, orphans, and copied source spans. `--full` compares every page
+against its captured sources instead of only recently changed pages.
+
+#### `mystuff wiki rebuild-index`
+
+Regenerate page digests, outgoing links, backlinks, and `metadata/index.json`
+from the Markdown content.
+
+#### `mystuff wiki remove`
+
+Remove a synthesized page by stable id, slug, or generated web URL. The command
+also deletes captured raw sources that no remaining page uses. Shared sources
+are preserved, and incoming links are converted to plain text so the wiki does
+not acquire broken links.
+
+```bash
+mystuff wiki remove wiki-http --dry-run
+mystuff wiki remove http --force
+mystuff wiki remove https://example.com/wiki/http.html
+```
+
+Use `--dry-run` to inspect the affected sources and incoming pages, and
+`--force` to skip confirmation. The central `wiki-index` page cannot be removed.
+
+#### `mystuff wiki migrate-legacy`
+
+Capture files from the old wiki tree as immutable `legacy-note` sources. The
+original files are preserved and are not automatically published.
 
 #### `mystuff wiki new`
 
-Create a new wiki note.
+Create a manually authored page in `wiki/content/`.
 
 ```bash
 mystuff wiki new [OPTIONS] TITLE
@@ -280,6 +344,7 @@ mystuff wiki new [OPTIONS] TITLE
 - `--alias TEXT`: Aliases for the note (can be used multiple times)
 - `--body TEXT`: Content for the wiki note
 - `--no-edit`: Don't open editor after creation
+- `--public / --private`: Control static-site publication (default: public)
 
 **Examples:**
 
@@ -297,9 +362,7 @@ View a wiki note.
 mystuff wiki view [OPTIONS] [TITLE]
 ```
 
-**Options:**
-
-- Uses fzf selection if title not provided
+The title, alias, or slug is required.
 
 #### `mystuff wiki edit`
 
@@ -309,9 +372,7 @@ Edit a wiki note.
 mystuff wiki edit [OPTIONS] [TITLE]
 ```
 
-**Options:**
-
-- Uses fzf selection if title not provided
+The title, alias, or slug is required.
 
 #### `mystuff wiki list`
 
@@ -339,15 +400,14 @@ mystuff wiki search [OPTIONS] QUERY
 
 #### `mystuff wiki delete`
 
-Delete a wiki note.
+Delete a wiki note without source cleanup. Prefer `wiki remove` for synthesized
+pages.
 
 ```bash
 mystuff wiki delete [OPTIONS] [TITLE]
 ```
 
-**Options:**
-
-- Uses fzf selection if title not provided
+Use `--force` to skip deletion confirmation.
 
 ---
 
@@ -718,7 +778,11 @@ After running `mystuff init`, your directory will contain:
 ├── links.jsonl          # Link storage
 ├── meetings/            # Meeting notes (Markdown)
 ├── journal/             # Journal entries (Markdown)
-├── wiki/                # Wiki notes (Markdown)
+├── wiki/
+│   ├── raw/             # Immutable originals and extracted text
+│   ├── content/         # Synthesized Markdown pages and index.md
+│   ├── metadata/        # Sources, page digests, runs, and audits
+│   └── EDITORIAL.md     # Provider-neutral writing contract
 ├── eval/                # Evaluation entries (YAML)
 ├── lists/               # Lists (YAML)
 ├── learning/
@@ -739,6 +803,26 @@ settings:
   default_tags: []
   date_format: "%Y-%m-%d"
   time_format: "%H:%M:%S"
+ai:
+  default_provider: codex
+  providers:
+    codex:
+      command: ["codex"]
+      model: null
+      reasoning_effort: null
+      profile: null
+  tasks:
+    learning:
+      provider: codex
+    wiki:
+      provider: codex
+wiki:
+  language: English
+  capture:
+    timeout_seconds: 20
+    max_bytes: 20000000
+    resolvers:
+      x: []
 sync:
   commands:
     - echo "Sync data"

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+
+{% block page_title %}{{ page.title }} - Wiki - @{{ author }}{% endblock %}
+{% block main_class %}wiki-page{% endblock %}
+
+{% block content %}
+<nav class="content-breadcrumb" aria-label="Wiki breadcrumb">
+  <a href="index.html">Wiki</a>
+  <span aria-hidden="true">/</span>
+  <span>{{ page.title }}</span>
+</nav>
+
+<article class="wiki-prose">
+  {{ page.content_html|safe }}
+</article>
+
+{% if page.backlink_pages %}
+<section class="stack-block wiki-related">
+  <h2>Linked from</h2>
+  <ul class="plain-list">
+    {% for backlink in page.backlink_pages %}
+    <li><a href="{{ backlink.url }}">{{ backlink.title }}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+{% if page.source_links %}
+<section class="stack-block wiki-sources">
+  <h2>Sources</h2>
+  <ul class="plain-list">
+    {% for source in page.source_links %}
+    <li><a href="{{ source.url }}" target="_blank" rel="noopener noreferrer">{{ source.title }}</a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+{% endblock %}

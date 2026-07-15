@@ -65,7 +65,11 @@ pip install -e .
 ├── links.jsonl           # bookmarks & repositories
 ├── journal/2025‑07‑28.md
 ├── meeting/2025/standup.md
-├── wiki/elixir‑patterns.md
+├── wiki/
+│   ├── raw/              # immutable source captures
+│   ├── content/          # synthesized public/private Markdown pages
+│   ├── metadata/         # source records, lexical index, and audit state
+│   └── EDITORIAL.md      # provider-neutral writing contract
 ├── lists/reading.yaml
 ├── learning/
 │   ├── lessons/
@@ -79,6 +83,79 @@ pip install -e .
 ```
 
 All data is stored as plain text for transparency and portability.
+
+## Compounding Wiki
+
+The wiki turns captured sources into interconnected, explanatory pages. Raw
+documents are immutable and are never published; `wiki/content/index.md` is the
+human navigational entry point and `wiki/metadata/index.json` is a regenerable
+lexical index used for related-page retrieval and fast audits.
+
+```bash
+# Capture a URL, let the configured agent synthesize pages, and audit changes
+mystuff wiki ingest https://example.com/article
+
+# Capture now and process later
+mystuff wiki ingest https://example.com/article --capture-only
+mystuff wiki process src-CONTENT_HASH
+mystuff wiki process-batch src-FIRST src-SECOND src-THIRD
+
+# Preview the structured change set without applying it
+mystuff wiki ingest https://example.com/article --dry-run
+
+# Re-run synthesis for content that was already processed
+mystuff wiki ingest https://example.com/article --reprocess
+
+# Inspect source state and regenerate derived metadata
+mystuff wiki status
+mystuff wiki rebuild-index
+
+# Fast structural audit or full source-overlap audit
+mystuff wiki audit
+mystuff wiki audit --full
+
+# Remove a generated page by id, slug, or public URL, including unused raw data
+mystuff wiki remove wiki-http --dry-run
+mystuff wiki remove https://example.com/wiki/http.html
+
+# Preserve old wiki files as immutable legacy inputs
+mystuff wiki migrate-legacy
+```
+
+One source can create several pages or improve existing ones. Generated pages
+use normal relative Markdown links and default to `public: true`; set a page to
+`public: false` to exclude it from the static website. Backlinks are derived
+from the content and are not stored in page frontmatter.
+
+The external agent is configured once and shared with Learning:
+
+```yaml
+ai:
+  default_provider: codex
+  providers:
+    codex:
+      command: ["codex"]
+      model: null      # inherit Codex's current default
+      reasoning_effort: null # for example: medium
+      profile: null
+  tasks:
+    learning:
+      provider: codex
+    wiki:
+      provider: codex
+
+wiki:
+  language: English
+  capture:
+    timeout_seconds: 20
+    max_bytes: 20000000
+    resolvers:
+      x: []            # optional URL templates for thread-reader fallbacks
+```
+
+The agent receives captured source ids and a small lexical neighborhood. It
+returns a JSON change set; the CLI validates and applies that result rather than
+granting the source document direct write authority.
 
 ## Learning Management
 
@@ -180,6 +257,8 @@ generate:
 
 Features:
 
+- **Public compounding wiki** – `wiki/index.html` and one page per public wiki entry
+- **Privacy-safe regeneration** – private wiki pages and stale generated HTML are removed
 - **Classification hub** – `learning.html` is now the top-level directory of classifications
 - **Intermediate classification pages** – each classification gets its own page listing the tracks inside it
 - **Minimal track pages** – each track page now acts as a clean syllabus of lessons

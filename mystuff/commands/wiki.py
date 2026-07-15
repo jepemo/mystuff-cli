@@ -1,110 +1,101 @@
+"""CLI for the compounding MyStuff wiki.
+
+The new wiki is source-driven and stores generated pages under ``wiki/content``.
+The small legacy helpers remain available so existing notes and callers can be
+read while users migrate them into immutable raw captures.
 """
-Wiki command for MyStuff CLI
-Manages topical notes with Markdown files, YAML front-matter, and backlinks
-"""
+
+from __future__ import annotations
 
 import os
 import re
+import shlex
 import subprocess
 from pathlib import Path
-from typing import Annotated, List, Optional, Set
+from typing import Annotated, Dict, List, Optional, Set
 
 import typer
 import yaml
 
-
-def get_mystuff_dir() -> Path:
-    """Get the mystuff data directory from config or environment"""
-    mystuff_home = os.getenv("MYSTUFF_HOME")
-    if mystuff_home:
-        return Path(mystuff_home).expanduser().resolve()
-    return Path.home() / ".mystuff"
+from mystuff.ai import AgentRunnerError
+from mystuff.wiki.audit import audit_wiki
+from mystuff.wiki.capture import CaptureError, reextract_source
+from mystuff.wiki.index import build_wiki_index
+from mystuff.wiki.pipeline import (
+    WikiPipelineError,
+    ingest_url,
+    migrate_legacy_sources,
+    process_source,
+    process_sources,
+    repair_legacy_batch_provenance,
+)
+from mystuff.wiki.removal import (
+    WikiRemovalError,
+    plan_page_removal,
+    remove_wiki_page,
+)
+from mystuff.wiki.storage import (
+    ensure_wiki_layout,
+    get_wiki_paths,
+    iter_source_metadata,
+    load_markdown,
+    today,
+    write_markdown,
+)
 
 
 def get_wiki_dir() -> Path:
-    """Get the path to the wiki directory"""
-    return get_mystuff_dir() / "wiki"
+    return get_wiki_paths().root
 
 
-def ensure_wiki_dir_exists():
-    """Ensure the wiki directory exists"""
-    wiki_dir = get_wiki_dir()
-    wiki_dir.mkdir(parents=True, exist_ok=True)
+def get_wiki_content_dir() -> Path:
+    return get_wiki_paths().content
+
+
+def ensure_wiki_dir_exists() -> None:
+    ensure_wiki_layout(get_wiki_paths())
 
 
 def slugify(text: str) -> str:
-    """Convert text to a URL-friendly slug"""
-    # Convert to lowercase and replace spaces with hyphens
     slug = text.lower().replace(" ", "-")
-    # Remove non-alphanumeric characters except hyphens
     slug = re.sub(r"[^a-z0-9-]", "", slug)
-    # Remove multiple consecutive hyphens
     slug = re.sub(r"-+", "-", slug)
-    # Remove leading/trailing hyphens
-    slug = slug.strip("-")
-    return slug
+    return slug.strip("-")
 
 
 def get_wiki_filename(title: str) -> str:
-    """Generate filename for a wiki note"""
     return f"{slugify(title)}.md"
 
 
 def get_editor() -> str:
-    """Get the editor from environment or config"""
     return os.getenv("EDITOR", "vim")
 
 
-def is_fzf_available() -> bool:
-    """Check if fzf is available on the system"""
-    try:
-        subprocess.run(["fzf", "--version"], capture_output=True, check=True)
-        return True
-    except (subprocess.CalledProcessError, FileNotFoundError):
+def open_editor(file_path: Path) -> bool:
+    command = shlex.split(get_editor())
+    if not command:
+        typer.echo("Editor command is empty", err=True)
         return False
+    try:
+        subprocess.run(command + [str(file_path)], check=True)
+        return True
+    except subprocess.CalledProcessError:
+        typer.echo(f"Error opening editor: {command[0]}", err=True)
+    except FileNotFoundError:
+        typer.echo(f"Editor not found: {command[0]}", err=True)
+    return False
 
 
-def load_wiki_from_file(file_path: Path) -> dict:
-    """Load wiki note metadata and content from a markdown file"""
-    with open(file_path, "r", encoding="utf-8") as f:
-        content = f.read()
-
-    # Split front-matter and body
-    if content.startswith("---\n"):
-        parts = content.split("---\n", 2)
-        if len(parts) >= 3:
-            front_matter = parts[1]
-            body = parts[2].strip()
-
-            # Parse YAML front-matter
-            metadata = yaml.safe_load(front_matter)
-            if metadata is None:
-                metadata = {}
-
-            metadata["body"] = body
-            metadata["file_path"] = file_path
-
-            # Ensure required fields exist
-            if "title" not in metadata:
-                metadata["title"] = file_path.stem.replace("-", " ").title()
-            if "tags" not in metadata:
-                metadata["tags"] = []
-            if "aliases" not in metadata:
-                metadata["aliases"] = []
-            if "backlinks" not in metadata:
-                metadata["backlinks"] = []
-
-            return metadata
-
-    # No front-matter found
-    return {
-        "title": file_path.stem.replace("-", " ").title(),
-        "tags": [],
-        "aliases": [],
-        "backlinks": [],
-        "body": content,
-        "file_path": file_path,
-    }
+def load_wiki_from_file(file_path: Path) -> Dict:
+    """Load both new wiki pages and legacy frontmatter."""
+    page = load_markdown(file_path)
+    metadata = dict(page["metadata"])
+    metadata.setdefault("tags", metadata.get("topics", []))
+    metadata.setdefault("aliases", [])
+    metadata.setdefault("backlinks", [])
+    metadata["body"] = page["body"]
+    metadata["file_path"] = file_path
+    return metadata
 
 
 def save_wiki_to_file(
@@ -114,560 +105,555 @@ def save_wiki_to_file(
     aliases: List[str],
     backlinks: List[str],
     body: str,
-):
-    """Save wiki note metadata and content to a markdown file"""
-    # Create front-matter
-    front_matter = {
+) -> None:
+    """Compatibility writer for legacy notes.
+
+    New generated pages use :func:`mystuff.wiki.storage.write_markdown` and do
+    not persist derived backlinks in frontmatter.
+    """
+    metadata = {
         "title": title,
         "tags": tags,
         "aliases": aliases,
         "backlinks": backlinks,
     }
-
-    # Write file with YAML front-matter
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write("---\n")
-        yaml.dump(front_matter, f, default_flow_style=False, allow_unicode=True)
-        f.write("---\n\n")
-        f.write(body)
-
-
-def open_editor(file_path: Path) -> bool:
-    """Open file in the default editor"""
-    editor = get_editor()
-    try:
-        subprocess.run([editor, str(file_path)], check=True)
-        return True
-    except subprocess.CalledProcessError:
-        typer.echo(f"Error opening editor: {editor}")
-        return False
-    except FileNotFoundError:
-        typer.echo(f"Editor not found: {editor}")
-        return False
+    file_path.parent.mkdir(parents=True, exist_ok=True)
+    frontmatter = yaml.safe_dump(
+        metadata,
+        default_flow_style=False,
+        allow_unicode=True,
+        sort_keys=False,
+    ).strip()
+    file_path.write_text(
+        f"---\n{frontmatter}\n---\n\n{body.rstrip()}", encoding="utf-8"
+    )
 
 
-def get_all_wiki_notes() -> List[dict]:
-    """Get all wiki notes from the wiki directory"""
-    wiki_dir = get_wiki_dir()
-    if not wiki_dir.exists():
-        return []
+def _wiki_note_paths() -> List[Path]:
+    paths = get_wiki_paths()
+    content_paths = sorted(paths.content.glob("*.md")) if paths.content.exists() else []
+    # Before migration, keep reading root-level notes exactly as the old CLI did.
+    return content_paths or sorted(paths.root.glob("*.md"))
 
+
+def get_all_wiki_notes() -> List[Dict]:
     notes = []
-    for file_path in wiki_dir.glob("*.md"):
+    for path in _wiki_note_paths():
         try:
-            note = load_wiki_from_file(file_path)
-            notes.append(note)
-        except Exception as e:
-            typer.echo(f"Error loading wiki note {file_path}: {e}", err=True)
-
-    # Sort by title
-    notes.sort(key=lambda x: x.get("title", "").lower())
-    return notes
+            notes.append(load_wiki_from_file(path))
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            typer.echo(f"Error loading wiki note {path}: {exc}", err=True)
+    return sorted(notes, key=lambda note: str(note.get("title") or "").lower())
 
 
-def find_wiki_note_by_title_or_alias(title: str) -> Optional[dict]:
-    """Find a wiki note by title or alias"""
-    notes = get_all_wiki_notes()
-    title_lower = title.lower()
-
-    for note in notes:
-        # Check exact title match
-        if note.get("title", "").lower() == title_lower:
+def find_wiki_note_by_title_or_alias(title: str) -> Optional[Dict]:
+    expected = title.lower()
+    for note in get_all_wiki_notes():
+        if str(note.get("title") or "").lower() == expected:
             return note
-
-        # Check aliases
-        for alias in note.get("aliases", []):
-            if alias.lower() == title_lower:
-                return note
-
-        # Check slug match
+        if any(str(alias).lower() == expected for alias in note.get("aliases", [])):
+            return note
         if note["file_path"].stem == slugify(title):
             return note
-
     return None
 
 
 def extract_wiki_links(content: str) -> Set[str]:
-    """Extract wiki-style links from content (e.g., [[Link Title]])"""
-    # Pattern to match [[Link Title]] or [[Link Title|Display Text]]
-    pattern = r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]"
-    matches = re.findall(pattern, content)
-    return set(matches)
+    return set(re.findall(r"\[\[([^\]|]+)(?:\|[^\]]+)?\]\]", content))
 
 
-def update_backlinks():
-    """Update backlinks for all wiki notes"""
+def update_backlinks() -> None:
+    """Update legacy backlinks or rebuild the derived index for new pages."""
     notes = get_all_wiki_notes()
+    if not notes:
+        return
+    paths = get_wiki_paths()
+    if all(note["file_path"].parent == paths.content for note in notes):
+        build_wiki_index(paths)
+        return
 
-    # Build a mapping of title/alias to file path
-    title_to_file = {}
+    title_to_file: Dict[str, Path] = {}
     for note in notes:
-        title = note.get("title", "")
-        file_path = note["file_path"]
-
-        # Add title mapping
-        if title:
-            title_to_file[title.lower()] = file_path
-
-        # Add alias mappings
+        title_to_file[str(note.get("title") or "").lower()] = note["file_path"]
         for alias in note.get("aliases", []):
-            title_to_file[alias.lower()] = file_path
-
-    # Track backlinks for each note
-    backlinks_map = {note["file_path"]: set() for note in notes}
-
-    # Scan all notes for wiki links
+            title_to_file[str(alias).lower()] = note["file_path"]
+    backlinks = {note["file_path"]: set() for note in notes}
     for note in notes:
-        content = note.get("body", "")
-        wiki_links = extract_wiki_links(content)
-
-        for link in wiki_links:
-            target_file = title_to_file.get(link.lower())
-            if target_file:
-                # Add this note as a backlink to the target
-                backlinks_map[target_file].add(note["file_path"].stem)
-
-    # Update backlinks in all notes
+        for link in extract_wiki_links(note.get("body", "")):
+            target = title_to_file.get(link.lower())
+            if target:
+                backlinks[target].add(note["file_path"].stem)
     for note in notes:
-        file_path = note["file_path"]
-        current_backlinks = set(note.get("backlinks", []))
-        new_backlinks = backlinks_map.get(file_path, set())
-
-        # Only update if backlinks changed
-        if current_backlinks != new_backlinks:
-            note["backlinks"] = sorted(list(new_backlinks))
+        new_backlinks = sorted(backlinks[note["file_path"]])
+        if new_backlinks != sorted(note.get("backlinks", [])):
             save_wiki_to_file(
-                file_path,
-                note.get("title", ""),
+                note["file_path"],
+                note.get("title", "Untitled"),
                 note.get("tags", []),
                 note.get("aliases", []),
-                note.get("backlinks", []),
+                new_backlinks,
                 note.get("body", ""),
             )
 
 
-def select_wiki_with_fzf(notes: List[dict]) -> Optional[dict]:
-    """Use fzf to select a wiki note interactively"""
-    if not notes:
-        return None
-
-    # Create options for fzf
-    options = []
+def search_notes_by_text(notes: List[Dict], search_text: str) -> List[Dict]:
+    expected = search_text.lower()
+    results = []
     for note in notes:
-        title = note.get("title", "")
-        tags_str = f"[{', '.join(note.get('tags', []))}]" if note.get("tags") else ""
-        aliases_str = (
-            f"({', '.join(note.get('aliases', []))})" if note.get("aliases") else ""
-        )
-
-        # Show first line of content as preview
-        body_preview = note.get("body", "").split("\n")[0][:40]
-        if len(body_preview) == 40:
-            body_preview += "..."
-
-        option = f"{title} {tags_str} {aliases_str} {body_preview}"
-        options.append(option)
-
-    # Create a temporary file with the options
-    import os
-    import tempfile
-
-    with tempfile.NamedTemporaryFile(
-        mode="w", delete=False, suffix=".txt", encoding="utf-8"
-    ) as temp_file:
-        for option in options:
-            temp_file.write(option + "\n")
-        temp_file_path = temp_file.name
-
-    try:
-        # Use os.system to allow fzf to control the terminal directly
-        # Redirect the selected option to a temporary output file
-        output_file = tempfile.mktemp(suffix=".txt")
-
-        cmd = (
-            f"cat {temp_file_path} | fzf --height=40% --layout=reverse "
-            f"--prompt='Select wiki note: ' > {output_file}"
-        )
-        result = os.system(cmd)
-
-        if result == 0:  # Success
-            try:
-                with open(output_file, "r", encoding="utf-8") as f:
-                    selected_line = f.read().strip()
-
-                if selected_line:
-                    # Find the corresponding note
-                    for i, option in enumerate(options):
-                        if option == selected_line:
-                            return notes[i]
-            except FileNotFoundError:
-                pass  # No selection made
-            finally:
-                # Clean up output file
-                try:
-                    os.unlink(output_file)
-                except OSError:
-                    pass
-
-        return None
-    except Exception as e:
-        typer.echo(f"Error running fzf: {e}", err=True)
-        return None
-    finally:
-        # Clean up temporary input file
-        try:
-            os.unlink(temp_file_path)
-        except OSError:
-            pass
+        values = [
+            str(note.get("title") or ""),
+            str(note.get("body") or ""),
+            *[str(value) for value in note.get("tags", [])],
+            *[str(value) for value in note.get("topics", [])],
+            *[str(value) for value in note.get("aliases", [])],
+        ]
+        if any(expected in value.lower() for value in values):
+            results.append(note)
+    return results
 
 
-def search_notes_by_text(notes: List[dict], search_text: str) -> List[dict]:
-    """Search notes by full-text content"""
-    search_lower = search_text.lower()
-    filtered_notes = []
-
-    for note in notes:
-        # Search in title
-        title = note.get("title", "").lower()
-        if search_lower in title:
-            filtered_notes.append(note)
-            continue
-
-        # Search in body content
-        body = note.get("body", "").lower()
-        if search_lower in body:
-            filtered_notes.append(note)
-            continue
-
-        # Search in tags
-        tags = note.get("tags", [])
-        for tag in tags:
-            if search_lower in tag.lower():
-                filtered_notes.append(note)
-                break
-        else:
-            # Search in aliases
-            aliases = note.get("aliases", [])
-            for alias in aliases:
-                if search_lower in alias.lower():
-                    filtered_notes.append(note)
-                    break
-
-    return filtered_notes
-
-
-def generate_ascii_graph(note: dict, max_depth: int = 2) -> str:
-    """Generate a simple ASCII graph of backlinks"""
-    if not note.get("backlinks"):
+def generate_ascii_graph(note: Dict, max_depth: int = 2) -> str:
+    del max_depth  # Kept for compatibility with the old public helper.
+    backlinks = note.get("backlinks", [])
+    if not backlinks:
         return f"{note.get('title', 'Untitled')}\n  (no backlinks)"
-
-    graph = f"{note.get('title', 'Untitled')}\n"
-
-    for i, backlink_slug in enumerate(note.get("backlinks", [])):
-        is_last = i == len(note.get("backlinks", [])) - 1
-        prefix = "└── " if is_last else "├── "
-
-        # Try to find the actual title for this backlink
-        backlink_title = backlink_slug.replace("-", " ").title()
-        backlink_file = get_wiki_dir() / f"{backlink_slug}.md"
-
-        if backlink_file.exists():
-            try:
-                backlink_note = load_wiki_from_file(backlink_file)
-                backlink_title = backlink_note.get("title", backlink_title)
-            except Exception:
-                pass
-
-        graph += f"  {prefix}{backlink_title}\n"
-
-    return graph
+    lines = [str(note.get("title") or "Untitled")]
+    for index, backlink in enumerate(backlinks):
+        prefix = "└── " if index == len(backlinks) - 1 else "├── "
+        lines.append(f"  {prefix}{str(backlink).replace('-', ' ').title()}")
+    return "\n".join(lines)
 
 
 def new_wiki_note(
-    title: Annotated[str, typer.Argument(help="Title of the wiki note")],
-    tags: Annotated[
-        Optional[List[str]],
-        typer.Option("--tag", help="One or more tags for categorization"),
-    ] = None,
-    aliases: Annotated[
-        Optional[List[str]],
-        typer.Option("--alias", help="One or more aliases for the note"),
-    ] = None,
-    body: Annotated[
-        Optional[str], typer.Option("--body", help="Content for the wiki note")
-    ] = None,
-    no_edit: Annotated[
-        bool, typer.Option("--no-edit", help="Don't open editor after creation")
-    ] = False,
-):
-    """Create a new wiki note"""
-    if not title:
+    title: Annotated[str, typer.Argument(help="Title of the wiki page")],
+    tags: Annotated[Optional[List[str]], typer.Option("--tag")] = None,
+    aliases: Annotated[Optional[List[str]], typer.Option("--alias")] = None,
+    body: Annotated[Optional[str], typer.Option("--body")] = None,
+    no_edit: Annotated[bool, typer.Option("--no-edit")] = False,
+    public: Annotated[
+        bool, typer.Option("--public/--private", help="Publish this page on the web")
+    ] = True,
+) -> None:
+    """Create a manually authored page in the new wiki."""
+    if not title.strip():
         typer.echo("Error: Title is required", err=True)
-        raise typer.Exit(code=1)
-
-    ensure_wiki_dir_exists()
-
-    # Set default values
-    if tags is None:
-        tags = []
-    if aliases is None:
-        aliases = []
-
-    # Generate filename
-    filename = get_wiki_filename(title)
-    file_path = get_wiki_dir() / filename
-
-    # Check if file already exists
-    if file_path.exists():
-        typer.echo(f"Wiki note already exists: {title}")
-        if not no_edit and typer.confirm("Do you want to edit the existing note?"):
-            if open_editor(file_path):
-                typer.echo(f"✅ Wiki note updated: {title}")
-                # Update backlinks after editing
-                update_backlinks()
+        raise typer.Exit(1)
+    paths = ensure_wiki_layout(get_wiki_paths())
+    slug = slugify(title)
+    if not slug:
+        typer.echo("Error: Title does not produce a valid slug", err=True)
+        raise typer.Exit(1)
+    destination = paths.content / f"{slug}.md"
+    if destination.exists():
+        typer.echo(f"Wiki page already exists: {title}")
         return
-
-    # Use body or default content
-    if body:
-        wiki_body = body
-    else:
-        wiki_body = f"""# {title}
-
-## Overview
-
-Brief description of {title}.
-
-## Key Points
-
--
-
-## Related Notes
-
--
-
-## References
-
--
-"""
-
-    # Save the wiki file
-    save_wiki_to_file(file_path, title, tags, aliases, [], wiki_body)
-
-    typer.echo(f"✅ Wiki note created: {title}")
-
-    # Open in editor if not disabled
+    page_body = body or (
+        f"# {title}\n\n"
+        "Start with the concrete question or confusion this page should resolve.\n"
+    )
+    metadata = {
+        "id": f"wiki-{slug}",
+        "title": title,
+        "summary": "",
+        "page_type": "concept",
+        "aliases": aliases or [],
+        "topics": tags or [],
+        "sources": [],
+        "freshness": "stable",
+        "public": public,
+        "created_at": today(),
+        "updated_at": today(),
+    }
+    write_markdown(destination, metadata, page_body)
+    build_wiki_index(paths)
+    typer.echo(f"✅ Wiki page created: {title}")
     if not no_edit:
-        if open_editor(file_path):
-            typer.echo(f"✅ Wiki note saved: {title}")
-            # Update backlinks after editing
-            update_backlinks()
+        open_editor(destination)
 
 
 def view_wiki_note(
-    title: Annotated[
-        str, typer.Argument(help="Title or alias of the wiki note to view")
-    ],
-    graph: Annotated[
-        bool, typer.Option("--graph", help="Display ASCII graph of backlinks")
-    ] = False,
-):
-    """View a wiki note"""
+    title: Annotated[str, typer.Argument(help="Title, alias, or slug")],
+    graph: Annotated[bool, typer.Option("--graph")] = False,
+) -> None:
     note = find_wiki_note_by_title_or_alias(title)
-
     if not note:
-        typer.echo(f"Wiki note not found: {title}")
-        return
-
+        typer.echo(f"Wiki page not found: {title}")
+        raise typer.Exit(1)
     if graph:
-        # Display ASCII graph
+        paths = get_wiki_paths()
+        index = build_wiki_index(paths, write=False)
+        record = next(
+            (page for page in index["pages"] if page["slug"] == note["file_path"].stem),
+            None,
+        )
+        if record:
+            note = dict(note)
+            note["backlinks"] = record["backlinks"]
         typer.echo(generate_ascii_graph(note))
-    else:
-        # Display note content
-        typer.echo(f"Title: {note.get('title', 'Untitled')}")
-
-        tags = note.get("tags", [])
-        if tags:
-            typer.echo(f"Tags: {', '.join(tags)}")
-
-        aliases = note.get("aliases", [])
-        if aliases:
-            typer.echo(f"Aliases: {', '.join(aliases)}")
-
-        backlinks = note.get("backlinks", [])
-        if backlinks:
-            typer.echo(f"Backlinks: {', '.join(backlinks)}")
-
-        typer.echo("\n" + "=" * 50 + "\n")
-        typer.echo(note.get("body", ""))
+        return
+    typer.echo(note.get("body", ""))
 
 
 def edit_wiki_note(
-    title: Annotated[
-        str, typer.Argument(help="Title or alias of the wiki note to edit")
-    ],
-):
-    """Edit an existing wiki note"""
+    title: Annotated[str, typer.Argument(help="Title, alias, or slug")],
+) -> None:
     note = find_wiki_note_by_title_or_alias(title)
-
     if not note:
-        typer.echo(f"Wiki note not found: {title}")
-        if typer.confirm("Do you want to create a new note?"):
-            new_wiki_note(title, no_edit=False)
-        return
-
-    file_path = note["file_path"]
-
-    # Open in editor
-    if open_editor(file_path):
-        typer.echo(f"✅ Wiki note updated: {note.get('title', 'Untitled')}")
-        # Update backlinks after editing
+        typer.echo(f"Wiki page not found: {title}")
+        raise typer.Exit(1)
+    if open_editor(note["file_path"]):
         update_backlinks()
+        typer.echo(f"✅ Wiki page updated: {note.get('title', 'Untitled')}")
 
 
 def delete_wiki_note(
-    title: Annotated[
-        str, typer.Argument(help="Title or alias of the wiki note to delete")
+    title: Annotated[str, typer.Argument(help="Title, alias, or slug")],
+    force: Annotated[bool, typer.Option("--force", "-f")] = False,
+) -> None:
+    note = find_wiki_note_by_title_or_alias(title)
+    if not note:
+        typer.echo(f"Wiki page not found: {title}")
+        raise typer.Exit(1)
+    if not force and not typer.confirm(f"Delete '{note.get('title', title)}'?"):
+        typer.echo("Deletion cancelled.")
+        return
+    note["file_path"].unlink()
+    update_backlinks()
+    typer.echo(f"✅ Wiki page deleted: {note.get('title', title)}")
+
+
+def remove_synthesized_wiki_page(
+    identifier: Annotated[
+        str, typer.Argument(help="Page id, slug, or generated wiki URL")
     ],
     force: Annotated[
-        bool, typer.Option("--force", "-f", help="Force deletion without confirmation")
+        bool, typer.Option("--force", "-f", help="Skip the confirmation prompt")
     ] = False,
-):
-    """Delete a wiki note"""
-    note = find_wiki_note_by_title_or_alias(title)
-
-    if not note:
-        typer.echo(f"Wiki note not found: {title}")
-        return
-
-    note_title = note.get("title", "Untitled")
-    file_path = note["file_path"]
-
-    # Confirm deletion
-    if not force:
-        if not typer.confirm(f"Are you sure you want to delete '{note_title}'?"):
-            typer.echo("Deletion cancelled.")
-            return
-
-    # Delete the file
+    dry_run: Annotated[
+        bool, typer.Option("--dry-run", help="Show what would be removed")
+    ] = False,
+) -> None:
+    """Remove a page and any captured sources no other page still uses."""
+    paths = ensure_wiki_layout(get_wiki_paths())
     try:
-        file_path.unlink()
-        typer.echo(f"✅ Wiki note deleted: {note_title}")
+        plan = plan_page_removal(paths, identifier)
+    except (WikiRemovalError, OSError, ValueError) as exc:
+        typer.echo(f"❌ Wiki removal failed: {exc}", err=True)
+        raise typer.Exit(1)
 
-        # Update backlinks after deletion
-        update_backlinks()
-    except OSError as e:
-        typer.echo(f"Error deleting wiki note: {e}", err=True)
-        raise typer.Exit(code=1)
+    typer.echo(f"Page: {plan['id']} ({plan['slug']})")
+    typer.echo(f"Raw sources to delete: {len(plan['sources_to_delete'])}")
+    if plan["shared_sources"]:
+        typer.echo(
+            f"Shared sources preserved: {len(plan['shared_sources'])}"
+        )
+        for source_id, users in plan["shared_sources"].items():
+            typer.echo(f"  {source_id}: used by {', '.join(users)}")
+    if plan["incoming_pages"]:
+        typer.echo(
+            f"Incoming links to unwrap: {len(plan['incoming_pages'])}"
+        )
+    if dry_run:
+        typer.echo("Status: dry-run")
+        return
+    if not force and not typer.confirm(f"Remove '{plan['title']}' and unused raw data?"):
+        typer.echo("Removal cancelled.")
+        return
+    try:
+        result = remove_wiki_page(paths, identifier)
+    except (WikiRemovalError, OSError, ValueError) as exc:
+        typer.echo(f"❌ Wiki removal failed: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"✅ Removed wiki page: {result['title']}")
+    if result["updated_pages"]:
+        typer.echo("Updated links in: " + ", ".join(result["updated_pages"]))
+    if result["sources_to_delete"]:
+        typer.echo("Deleted sources: " + ", ".join(result["sources_to_delete"]))
 
 
 def list_wiki_notes(
-    no_interactive: Annotated[
-        bool,
-        typer.Option(
-            "--no-interactive",
-            help="Disable interactive selection even if fzf is available",
-        ),
-    ] = False,
-):
-    """List all wiki notes"""
+    no_interactive: Annotated[bool, typer.Option("--no-interactive")] = False,
+) -> None:
+    del no_interactive
     notes = get_all_wiki_notes()
-
     if not notes:
-        typer.echo("No wiki notes found.")
+        typer.echo("No wiki pages found.")
         return
-
-    # Use fzf if available for interactive selection (unless disabled)
-    if not no_interactive and is_fzf_available():
-        selected_note = select_wiki_with_fzf(notes)
-        if selected_note:
-            file_path = selected_note["file_path"]
-            if open_editor(file_path):
-                typer.echo(
-                    f"✅ Wiki note opened: {selected_note.get('title', 'Untitled')}"
-                )
-                # Update backlinks after editing
-                update_backlinks()
-        return
-
-    # Display notes
     for note in notes:
-        title = note.get("title", "Untitled")
-        tags_str = f"[{', '.join(note.get('tags', []))}]" if note.get("tags") else ""
-        aliases_str = (
-            f"({', '.join(note.get('aliases', []))})" if note.get("aliases") else ""
-        )
-
-        typer.echo(f"{title} {tags_str} {aliases_str}")
+        visibility = "public" if note.get("public", True) else "private"
+        typer.echo(f"{note.get('title', 'Untitled')} [{visibility}]")
 
 
 def search_wiki_notes(
-    query: Annotated[str, typer.Argument(help="Search query for wiki notes")],
-    graph: Annotated[
-        bool,
-        typer.Option("--graph", help="Display ASCII graph of backlinks for results"),
-    ] = False,
-    no_interactive: Annotated[
-        bool,
-        typer.Option(
-            "--no-interactive",
-            help="Disable interactive selection even if fzf is available",
-        ),
-    ] = False,
-):
-    """Search wiki notes by title, tags, or content"""
-    notes = get_all_wiki_notes()
-
-    if not notes:
-        typer.echo("No wiki notes found.")
+    query: Annotated[str, typer.Argument(help="Text to find")],
+    graph: Annotated[bool, typer.Option("--graph")] = False,
+    no_interactive: Annotated[bool, typer.Option("--no-interactive")] = False,
+) -> None:
+    del no_interactive
+    matches = search_notes_by_text(get_all_wiki_notes(), query)
+    if not matches:
+        typer.echo(f"No wiki pages found matching '{query}'")
         return
-
-    # Search by text content
-    filtered_notes = search_notes_by_text(notes, query)
-
-    if not filtered_notes:
-        typer.echo(f"No wiki notes found matching '{query}'")
-        return
-
-    # Use fzf if available for interactive selection (unless disabled)
-    if not no_interactive and is_fzf_available():
-        selected_note = select_wiki_with_fzf(filtered_notes)
-        if selected_note:
-            if graph:
-                typer.echo(generate_ascii_graph(selected_note))
-            else:
-                file_path = selected_note["file_path"]
-                if open_editor(file_path):
-                    typer.echo(
-                        f"✅ Wiki note opened: {selected_note.get('title', 'Untitled')}"
-                    )
-                    # Update backlinks after editing
-                    update_backlinks()
-        return
-
-    # Display matching notes
-    typer.echo(f"Found {len(filtered_notes)} wiki notes matching '{query}':")
-    for note in filtered_notes:
-        title = note.get("title", "Untitled")
-        tags_str = f"[{', '.join(note.get('tags', []))}]" if note.get("tags") else ""
-        aliases_str = (
-            f"({', '.join(note.get('aliases', []))})" if note.get("aliases") else ""
+    for note in matches:
+        typer.echo(
+            generate_ascii_graph(note) if graph else note.get("title", "Untitled")
         )
 
-        if graph:
-            typer.echo(f"\n{generate_ascii_graph(note)}")
-        else:
-            typer.echo(f"{title} {tags_str} {aliases_str}")
+
+def ingest_wiki_source(
+    url: Annotated[str, typer.Argument(help="URL to capture and synthesize")],
+    capture_only: Annotated[
+        bool,
+        typer.Option("--capture-only", help="Capture raw content without running AI"),
+    ] = False,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Generate and validate a plan without applying it"
+        ),
+    ] = False,
+    reprocess: Annotated[
+        bool,
+        typer.Option(
+            "--reprocess", help="Run synthesis again for an already processed source"
+        ),
+    ] = False,
+    codex_command: Annotated[
+        Optional[str],
+        typer.Option("--codex-command", help="Override configured Codex command"),
+    ] = None,
+) -> None:
+    """Capture a URL, synthesize wiki pages, and audit the changed neighborhood."""
+    try:
+        run = ingest_url(
+            get_wiki_paths(),
+            url,
+            capture_only=capture_only,
+            dry_run=dry_run,
+            reprocess=reprocess,
+            command_override=codex_command,
+        )
+    except (
+        CaptureError,
+        AgentRunnerError,
+        WikiPipelineError,
+        OSError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"❌ Wiki ingestion failed: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Source: {run['primary_source_id']}")
+    typer.echo(f"Status: {run['status']}")
+    if run.get("changed_pages"):
+        typer.echo("Changed pages: " + ", ".join(run["changed_pages"]))
+    if run.get("audit"):
+        typer.echo(
+            "Audit: "
+            f"{run['audit']['error_count']} errors, "
+            f"{run['audit']['warning_count']} warnings"
+        )
 
 
-# Create the Typer app for wiki commands
-wiki_app = typer.Typer(name="wiki", help="Manage topical notes with backlinks")
+def wiki_status() -> None:
+    """Show captured sources and whether they have been processed."""
+    paths = ensure_wiki_layout(get_wiki_paths())
+    sources = list(iter_source_metadata(paths))
+    if not sources:
+        typer.echo("No captured wiki sources.")
+        return
+    counts: Dict[str, int] = {}
+    for source in sources:
+        status = str(source.get("status") or "unknown")
+        counts[status] = counts.get(status, 0) + 1
+        typer.echo(
+            f"{source.get('source_id')} | {status} | "
+            f"{source.get('title') or source.get('original_url')}"
+        )
+    typer.echo(
+        "Summary: "
+        + ", ".join(f"{key}={value}" for key, value in sorted(counts.items()))
+    )
 
+
+def process_wiki_source(
+    source_id: Annotated[
+        str, typer.Argument(help="Captured source id shown by `wiki status`")
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Generate and validate a plan without applying it"
+        ),
+    ] = False,
+    reprocess: Annotated[
+        bool,
+        typer.Option("--reprocess", help="Run synthesis again for a processed source"),
+    ] = False,
+    codex_command: Annotated[
+        Optional[str],
+        typer.Option("--codex-command", help="Override configured Codex command"),
+    ] = None,
+) -> None:
+    """Process an existing immutable source capture by id."""
+    try:
+        run = process_source(
+            get_wiki_paths(),
+            source_id,
+            dry_run=dry_run,
+            reprocess=reprocess,
+            command_override=codex_command,
+        )
+    except (
+        AgentRunnerError,
+        WikiPipelineError,
+        OSError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"❌ Wiki processing failed: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Source: {run['primary_source_id']}")
+    typer.echo(f"Status: {run['status']}")
+    if run.get("changed_pages"):
+        typer.echo("Changed pages: " + ", ".join(run["changed_pages"]))
+    if run.get("audit"):
+        typer.echo(
+            "Audit: "
+            f"{run['audit']['error_count']} errors, "
+            f"{run['audit']['warning_count']} warnings"
+        )
+
+
+def process_wiki_source_batch(
+    source_ids: Annotated[
+        List[str],
+        typer.Argument(help="Related captured source ids to synthesize together"),
+    ],
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Generate and validate a plan without applying it"
+        ),
+    ] = False,
+    reprocess: Annotated[
+        bool,
+        typer.Option("--reprocess", help="Include already processed sources again"),
+    ] = False,
+    codex_command: Annotated[
+        Optional[str],
+        typer.Option("--codex-command", help="Override configured Codex command"),
+    ] = None,
+) -> None:
+    """Process related immutable sources as one coherent batch."""
+    try:
+        run = process_sources(
+            get_wiki_paths(),
+            source_ids,
+            dry_run=dry_run,
+            reprocess=reprocess,
+            command_override=codex_command,
+        )
+    except (
+        AgentRunnerError,
+        WikiPipelineError,
+        OSError,
+        ValueError,
+    ) as exc:
+        typer.echo(f"❌ Wiki batch processing failed: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"Sources: {', '.join(run['source_ids'])}")
+    typer.echo(f"Status: {run['status']}")
+    if run.get("changed_pages"):
+        typer.echo("Changed pages: " + ", ".join(run["changed_pages"]))
+    if run.get("audit"):
+        typer.echo(
+            "Audit: "
+            f"{run['audit']['error_count']} errors, "
+            f"{run['audit']['warning_count']} warnings"
+        )
+
+
+def audit_wiki_command(
+    full: Annotated[
+        bool, typer.Option("--full", help="Also compare source overlap for every page")
+    ] = False,
+) -> None:
+    """Audit schema, links, provenance, privacy boundaries, and staleness."""
+    paths = ensure_wiki_layout(get_wiki_paths())
+    report = audit_wiki(paths, full=full)
+    for finding in report["findings"]:
+        page = f" [{finding['page']}]" if finding.get("page") else ""
+        typer.echo(
+            f"{finding['severity'].upper()} {finding['code']}{page}: "
+            f"{finding['message']}"
+        )
+    typer.echo(
+        f"Audit: {report['error_count']} errors, "
+        f"{report['warning_count']} warnings across {report['page_count']} pages"
+    )
+    if report["error_count"]:
+        raise typer.Exit(1)
+
+
+def rebuild_wiki_index() -> None:
+    """Regenerate all machine metadata from wiki content."""
+    paths = ensure_wiki_layout(get_wiki_paths())
+    index = build_wiki_index(paths)
+    typer.echo(
+        f"✅ Indexed {index['page_count']} pages "
+        f"({index['public_page_count']} public)"
+    )
+
+
+def reextract_wiki_source(
+    source_id: Annotated[str, typer.Argument(help="Captured source id")],
+) -> None:
+    """Regenerate extracted text without changing the captured original."""
+    try:
+        source = reextract_source(get_wiki_paths(), source_id)
+    except (CaptureError, OSError, ValueError) as exc:
+        typer.echo(f"❌ Wiki extraction failed: {exc}", err=True)
+        raise typer.Exit(1)
+    typer.echo(f"✅ Re-extracted {source['source_id']} as {source['content_type']}")
+
+
+def migrate_legacy_wiki() -> None:
+    """Capture old wiki files as immutable legacy sources without deleting them."""
+    paths = ensure_wiki_layout(get_wiki_paths())
+    sources = migrate_legacy_sources(paths)
+    typer.echo(f"✅ Captured {len(sources)} legacy wiki files")
+    if sources:
+        typer.echo(
+            "Original files were preserved. Process them with `wiki process SOURCE_ID`."
+        )
+
+
+def repair_wiki_provenance() -> None:
+    """Repair source lists produced by the pre-v2 batch validator."""
+    paths = ensure_wiki_layout(get_wiki_paths())
+    changed = repair_legacy_batch_provenance(paths)
+    typer.echo(f"✅ Repaired provenance for {len(changed)} wiki pages")
+
+
+wiki_app = typer.Typer(
+    name="wiki", help="Capture, synthesize, and audit a compounding wiki"
+)
 wiki_app.command("new")(new_wiki_note)
 wiki_app.command("view")(view_wiki_note)
 wiki_app.command("edit")(edit_wiki_note)
 wiki_app.command("delete")(delete_wiki_note)
+wiki_app.command("remove")(remove_synthesized_wiki_page)
 wiki_app.command("list")(list_wiki_notes)
 wiki_app.command("search")(search_wiki_notes)
+wiki_app.command("ingest")(ingest_wiki_source)
+wiki_app.command("process")(process_wiki_source)
+wiki_app.command("process-batch")(process_wiki_source_batch)
+wiki_app.command("status")(wiki_status)
+wiki_app.command("audit")(audit_wiki_command)
+wiki_app.command("rebuild-index")(rebuild_wiki_index)
+wiki_app.command("reextract")(reextract_wiki_source)
+wiki_app.command("migrate-legacy")(migrate_legacy_wiki)
+wiki_app.command("repair-provenance")(repair_wiki_provenance)
+
 
 if __name__ == "__main__":
     wiki_app()

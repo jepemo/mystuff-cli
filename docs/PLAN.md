@@ -296,60 +296,19 @@ _(Empty sub‑folders contain a `.gitkeep`)_
 
 ---
 
-### 0.4 – Wiki (Topical Notes)
+### 0.4 – Compounding Wiki
 
-- Command: `mystuff wiki new|view|edit|delete|search`
-- Markdown files with **front‑matter** (tags, aliases)
-- Updates backlink index on save
-- Search by tag, keyword, or small ASCII graph view
-
-#### Flags
-
-- `--title` – Title of the wiki note (required for `new`).
-- `--tags` – One or more tags for categorization (repeatable flag).
-- `--alias` – One or more aliases for the note (repeatable flag, optional).
-- `--search` – Search by title, tags, or content (used with `search` subcommand).
-- `--graph` – Display a small ASCII graph of backlinks (used with `view` or `search`).
-
-#### File Format and Storage
-
-- **File Format**: Each wiki note is stored as a Markdown file with YAML front-matter for metadata.
-- **Storage Location**: Files are saved in the `~/.mystuff/wiki/` directory.
-- **File Structure**:
-
-  - File name: `<slugified-title>.md` (e.g., `project-overview.md`).
-  - Example content:
-
-    ```markdown
-    ---
-    title: "Project Overview"
-    tags: ["project", "overview"]
-    aliases: ["summary", "intro"]
-    backlinks: ["team-structure", "roadmap"]
-    ---
-
-    ## Project Overview
-
-    This note provides a high-level overview of the project, including goals, milestones, and key stakeholders.
-
-    ### Key Points
-
-    - The project aims to improve productivity.
-    - Collaboration is a core focus.
-    ```
-
-#### Backlink Management
-
-- Backlinks are automatically updated whenever a note is saved.
-- The `backlinks` field in the front-matter lists all notes that reference the current note.
-
-#### Tests
-
-- Validate required fields (`title`) and ensure defaults (e.g., empty `tags` or `aliases`) are applied.
-- CRUD operations for wiki notes.
-- Ensure backlinks are updated consistently across notes.
-- Verify `fzf` integration for filtering by title, tags, or content.
-- Test ASCII graph generation for backlinks.
+- `mystuff wiki ingest <url>` captures an immutable source, synthesizes one or
+  more durable pages, and audits the changed neighborhood.
+- `wiki/raw/` stores original bytes plus normalized text.
+- `wiki/content/` stores linked Markdown pages with `public: true` by default.
+- `wiki/metadata/` stores source records, page digests, backlinks, audit state,
+  and a regenerable lexical index.
+- The configured agent returns a structured change set and never writes the
+  wiki directly.
+- `mystuff wiki audit` checks schema, provenance, broken links, privacy edges,
+  staleness, aliases, and source-copy overlap.
+- `mystuff generate web` publishes only public content under `wiki/`.
 
 ---
 

@@ -862,6 +862,97 @@ body.lesson-reading .lesson-link-strip p {
   display: block;
 }
 
+.wiki-prose {
+  max-width: 72ch;
+}
+
+.wiki-prose img,
+.wiki-prose table {
+  max-width: 100%;
+}
+
+.wiki-prose table {
+  border-collapse: collapse;
+  display: block;
+  overflow-x: auto;
+}
+
+.wiki-prose th,
+.wiki-prose td {
+  border: 1px solid var(--line);
+  padding: .45rem .6rem;
+  text-align: left;
+}
+
+.wiki-directory {
+  padding: 1rem;
+}
+
+.wiki-directory-content {
+  max-width: none;
+  columns: 2 25rem;
+  column-gap: 2rem;
+}
+
+.wiki-directory-content > p:first-child {
+  column-span: all;
+  max-width: 62ch;
+  margin: 0 0 .75rem;
+  padding-bottom: .75rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+}
+
+.wiki-directory-content h2 {
+  break-after: avoid-column;
+  margin: 1.15rem 0 .35rem;
+  padding: 0 0 .2rem;
+  border-bottom: 1px solid var(--line);
+  color: var(--fg);
+  font: 700 1rem/1.25 var(--body-font);
+}
+
+.wiki-directory-content ul {
+  break-inside: avoid-column;
+  margin: 0 0 .75rem;
+  padding-left: 1.15rem;
+  list-style: square;
+}
+
+.wiki-directory-content li {
+  margin: .35rem 0;
+  padding-left: .1rem;
+  font-size: .91rem;
+  line-height: 1.4;
+}
+
+.wiki-directory-content li::marker {
+  color: var(--muted);
+}
+
+.wiki-directory-content li a {
+  font-weight: 700;
+}
+
+.wiki-directory-content > p:last-child:not(:first-of-type) {
+  column-span: all;
+  max-width: none;
+  margin: 1rem 0 .75rem;
+  padding-top: .65rem;
+  border-top: 1px solid var(--line);
+  color: var(--muted);
+  font: .85rem/1.45 var(--meta-font);
+}
+
+.wiki-directory-empty {
+  padding: 2rem 0;
+}
+
+.wiki-related,
+.wiki-sources {
+  max-width: 72ch;
+}
+
 @media (max-width: 700px) {
   body {
     font-size: 15px;
@@ -906,5 +997,9 @@ body.lesson-reading .lesson-link-strip p {
 
   body.lesson-reading .lesson-page-nav {
     grid-template-columns: 1fr;
+  }
+
+  .wiki-directory-content {
+    columns: 1;
   }
 }

@@ -5,6 +5,7 @@ MyStuff CLI - Generate static content functionality
 import json
 import os
 import posixpath
+import re
 import shutil
 import urllib.request
 from pathlib import Path
@@ -31,6 +32,12 @@ from mystuff.markdown_utils import (
     MATHJAX_SCRIPT_URL,
     LessonMathExtension,
     normalize_lesson_markdown,
+)
+from mystuff.wiki.index import build_wiki_index
+from mystuff.wiki.storage import (
+    get_wiki_paths,
+    load_markdown,
+    load_source_metadata,
 )
 
 console = Console()
@@ -411,8 +418,8 @@ def fetch_github_repo_details(
                 )
             elif e.code == 403:
                 console.print(
-                    f"[yellow]⚠️  Warning: GitHub API rate limit exceeded. "
-                    f"Skipping remaining repositories.[/yellow]"
+                    "[yellow]⚠️  Warning: GitHub API rate limit exceeded. "
+                    "Skipping remaining repositories.[/yellow]"
                 )
                 break
             else:
@@ -448,6 +455,128 @@ def load_mystuff_links() -> List[Dict[str, Any]]:
         console.print(f"[yellow]⚠️  Warning: Could not load links: {e}[/yellow]")
 
     return links
+
+
+WIKI_MARKDOWN_LINK_RE = re.compile(r"\[([^\]]+)\]\(([^)]+)\)")
+
+
+def rewrite_wiki_markdown_links(content: str, public_slugs: set[str]) -> str:
+    """Rewrite public wiki links to HTML and neutralize private/missing links."""
+
+    def replace(match: re.Match) -> str:
+        label, href = match.group(1), match.group(2)
+        parsed = urlsplit(href)
+        if parsed.scheme or parsed.netloc or not parsed.path:
+            return match.group(0)
+        if not parsed.path.lower().endswith(".md"):
+            return match.group(0)
+        target = posixpath.normpath(parsed.path).removesuffix(".md")
+        if target.startswith("./"):
+            target = target[2:]
+        if target not in public_slugs:
+            return label
+        rewritten = f"{target}.html"
+        if parsed.query:
+            rewritten += f"?{parsed.query}"
+        if parsed.fragment:
+            rewritten += f"#{parsed.fragment}"
+        return f"[{label}]({rewritten})"
+
+    return WIKI_MARKDOWN_LINK_RE.sub(replace, content)
+
+
+def _render_wiki_markdown(content: str, public_slugs: set[str]) -> str:
+    rewritten = rewrite_wiki_markdown_links(content, public_slugs)
+    return markdown.markdown(
+        rewritten,
+        extensions=["fenced_code", "tables", "codehilite"],
+        tab_length=2,
+    )
+
+
+def load_wiki_web_data() -> Dict[str, Any]:
+    """Load public wiki pages without exposing raw captures or metadata files."""
+    paths = get_wiki_paths(get_mystuff_dir())
+    if not paths.content.exists():
+        return {
+            "index_content": "",
+            "pages": [],
+            "page_count": 0,
+        }
+
+    index = build_wiki_index(paths, write=False)
+    public_records = [page for page in index["pages"] if page["public"]]
+    public_slugs = {page["slug"] for page in public_records}
+    pages = []
+    index_content = ""
+    for record in public_records:
+        source_path = paths.content / record["path"]
+        page = load_markdown(source_path)
+        content_html = _render_wiki_markdown(page["body"], public_slugs)
+        if record["slug"] == "index":
+            index_content = re.sub(
+                r"^\s*<h1>.*?</h1>\s*",
+                "",
+                content_html,
+                count=1,
+                flags=re.DOTALL,
+            )
+            index_content = re.sub(
+                r"^\s*<p>.*?</p>\s*",
+                "",
+                index_content,
+                count=1,
+                flags=re.DOTALL,
+            )
+            continue
+
+        source_links = []
+        for source_id in record.get("sources") or []:
+            try:
+                source = load_source_metadata(paths, source_id)
+            except (FileNotFoundError, ValueError):
+                continue
+            url = str(source.get("original_url") or "")
+            if not url.startswith(("http://", "https://")):
+                continue
+            source_links.append(
+                {
+                    "source_id": source_id,
+                    "title": source.get("title") or url,
+                    "url": url,
+                }
+            )
+        page_record = dict(record)
+        page_record.update(
+            {
+                "content_html": content_html,
+                "url": f"{record['slug']}.html",
+                "source_links": source_links,
+                "public_backlinks": [
+                    backlink
+                    for backlink in record["backlinks"]
+                    if backlink in public_slugs and backlink != "index"
+                ],
+            }
+        )
+        pages.append(page_record)
+
+    by_slug = {page["slug"]: page for page in pages}
+    for page in pages:
+        page["backlink_pages"] = [
+            {
+                "slug": slug,
+                "title": by_slug[slug]["title"],
+                "url": f"{slug}.html",
+            }
+            for slug in page["public_backlinks"]
+            if slug in by_slug
+        ]
+    return {
+        "index_content": index_content,
+        "pages": sorted(pages, key=lambda item: item["title"].lower()),
+        "page_count": len(pages),
+    }
 
 
 def _load_catalog_with_progress() -> tuple[Dict[str, Any], Dict[str, Any]]:
@@ -804,7 +933,7 @@ def copy_static_files(output_dir: Path) -> None:
     favicon_src = static_dir / "favicon.ico"
     if favicon_src.exists():
         shutil.copy2(favicon_src, output_dir / "favicon.ico")
-        console.print(f"  📄 Copied favicon.ico")
+        console.print("  📄 Copied favicon.ico")
 
 
 def render_template(
@@ -1063,6 +1192,45 @@ def generate_lesson_pages(
     console.print(f"  ✅ Generated {len(all_lessons)} lesson pages")
 
 
+def generate_wiki_pages(
+    output_dir: Path,
+    config: Dict[str, Any],
+    generated_at: str,
+    wiki: Dict[str, Any],
+) -> None:
+    """Generate the public wiki hub and one page per public content file."""
+    wiki_output = output_dir / "wiki"
+    wiki_output.mkdir(exist_ok=True)
+    expected = {"index.html"} | {
+        f"{page['slug']}.html" for page in wiki.get("pages") or []
+    }
+    # A page changing to public:false must disappear from an existing output dir.
+    for old_page in wiki_output.glob("*.html"):
+        if old_page.name not in expected:
+            old_page.unlink()
+
+    common = {
+        "title": config.get("title", "My Knowledge Base"),
+        "description": config.get("description", "Personal knowledge management"),
+        "author": config.get("author", "Your Name"),
+        "menu_items": config.get("menu_items", []),
+        "relative_root": "../",
+        "generated_at": generated_at,
+    }
+    render_template(
+        "wiki.html",
+        {**common, "wiki": wiki, "pages": wiki.get("pages") or []},
+        wiki_output / "index.html",
+    )
+    for page in wiki.get("pages") or []:
+        render_template(
+            "wiki_page.html",
+            {**common, "page": page},
+            wiki_output / f"{page['slug']}.html",
+        )
+    console.print(f"  ✅ Generated {wiki.get('page_count', 0)} wiki pages")
+
+
 def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     """Generate a static website."""
     from datetime import datetime, timezone
@@ -1086,6 +1254,10 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     console.print("\n📚 Loading links...")
     links = load_mystuff_links()
     console.print(f"  ✅ Loaded {len(links)} links")
+
+    console.print("\n🧠 Loading wiki data...")
+    wiki = load_wiki_web_data()
+    console.print(f"  ✅ Found {wiki['page_count']} public wiki pages")
 
     console.print("\n📖 Loading learning data...")
     learning = load_learning_data()
@@ -1120,6 +1292,7 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         "github_username": github_username,
         "repositories": repos,
         "links_json": json.dumps(links),
+        "wiki": wiki,
         "learning": learning,
         "active_learning": active_learning,
         "tracks": tracks,
@@ -1144,6 +1317,13 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
         console.print(
             "[yellow]  ⚠️  Skipping learning.html (template not found)[/yellow]"
         )
+
+    wiki_template = get_templates_dir() / "wiki.html"
+    wiki_page_template = get_templates_dir() / "wiki_page.html"
+    if wiki_template.exists() and wiki_page_template.exists():
+        generate_wiki_pages(output_dir, config, generated_at, wiki)
+    else:
+        console.print("[yellow]  ⚠️  Skipping wiki pages (templates not found)[/yellow]")
 
     classification_template = get_templates_dir() / "classification.html"
     if classification_template.exists():

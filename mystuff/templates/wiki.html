@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block page_title %}Wiki - @{{ author }}{% endblock %}
+{% block main_class %}wiki-hub{% endblock %}
+
+{% block content %}
+{% if wiki.index_content %}
+<section class="stack-block wiki-directory" aria-label="Wiki subject directory">
+  <article class="wiki-prose wiki-directory-content">
+    {{ wiki.index_content|safe }}
+  </article>
+</section>
+{% else %}
+<section class="stack-block wiki-directory-empty">
+  <p>No public wiki subjects yet.</p>
+</section>
+{% endif %}
+{% endblock %}

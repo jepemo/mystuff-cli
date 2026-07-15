@@ -14,6 +14,7 @@ from typing import Annotated, Any, Dict, List, Optional
 
 import typer
 
+from mystuff.ai import AgentRunnerError, resolve_agent_settings
 from mystuff.learning_catalog import (
     LearningCatalogError,
     LearningReferenceError,
@@ -271,15 +272,26 @@ def _run_codex_prompt(
     if dry_run:
         return
 
-    command = shlex.split(codex_command)
-    if not command:
-        typer.echo("❌ Empty Codex command.", err=True)
+    try:
+        settings = resolve_agent_settings(
+            "learning",
+            get_mystuff_dir(),
+            command_override=(codex_command if codex_command != "codex" else None),
+        )
+    except AgentRunnerError as exc:
+        typer.echo(f"❌ {exc}", err=True)
         raise typer.Exit(1)
+    command = list(settings.command) + ["exec"]
+    if settings.model:
+        command.extend(["--model", settings.model])
+    if settings.profile:
+        command.extend(["--profile", settings.profile])
+    command.append(prompt)
 
     started_at = time.time()
     try:
         subprocess.run(
-            command + ["exec", prompt],
+            command,
             cwd=get_mystuff_dir(),
             check=True,
         )

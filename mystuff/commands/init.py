@@ -10,6 +10,8 @@ from typing import Annotated
 import typer
 import yaml
 
+from mystuff.wiki.storage import ensure_wiki_layout, get_wiki_paths
+
 
 def init(
     dir: Annotated[
@@ -33,7 +35,9 @@ def init(
     - links.jsonl (file for storing links)
     - meetings/ (directory for meeting notes)
     - journal/ (directory for journal entries)
-    - wiki/ (directory for wiki pages)
+    - wiki/raw/ (immutable captured sources)
+    - wiki/content/ (synthesized Markdown pages)
+    - wiki/metadata/ (regenerable indexes and audit state)
     - eval/ (directory for self-evaluation notes)
     - lists/ (directory for lists)
     - config.yaml (configuration file)
@@ -98,6 +102,24 @@ def init(
         typer.echo(f"Error creating directory {learning_lessons_dir}: {e}")
         raise typer.Exit(code=1)
 
+    # Create the compounding wiki layout and its editorial entry points.
+    try:
+        wiki_paths = ensure_wiki_layout(get_wiki_paths(base_dir))
+        for directory in (
+            wiki_paths.raw,
+            wiki_paths.content,
+            wiki_paths.metadata,
+            wiki_paths.source_metadata,
+            wiki_paths.page_metadata,
+            wiki_paths.runs,
+        ):
+            gitkeep_file = directory / ".gitkeep"
+            gitkeep_file.touch(exist_ok=True)
+        typer.echo(f"Created compounding wiki layout: {wiki_paths.root}")
+    except OSError as e:
+        typer.echo(f"Error creating wiki layout: {e}")
+        raise typer.Exit(code=1)
+
     # Create default config.yaml file
     config_file = base_dir / "config.yaml"
     try:
@@ -109,6 +131,34 @@ def init(
                 "default_tags": [],
                 "date_format": "%Y-%m-%d",
                 "time_format": "%H:%M:%S",
+            },
+            "ai": {
+                "default_provider": "codex",
+                "providers": {
+                    "codex": {
+                        "command": ["codex"],
+                        # Null inherits the user's current Codex defaults.
+                        "model": None,
+                        "reasoning_effort": None,
+                        "profile": None,
+                    }
+                },
+                "tasks": {
+                    "learning": {"provider": "codex"},
+                    "wiki": {"provider": "codex"},
+                },
+            },
+            "wiki": {
+                "language": "English",
+                "capture": {
+                    "timeout_seconds": 20,
+                    "max_bytes": 20_000_000,
+                    "minimum_extracted_characters": 200,
+                    # Add resolver URL templates here when a source such as X
+                    # cannot be read directly. Supported placeholders:
+                    # {url}, {username}, and {status_id}.
+                    "resolvers": {"x": []},
+                }
             },
             "sync": {"commands": ['echo "Sync data"']},
         }
