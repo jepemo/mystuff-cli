@@ -1001,6 +1001,8 @@ def test_lesson_template_uses_reading_layout_and_exit_link(
         Path(__file__).resolve().parents[1] / "mystuff/static/css/style.css"
     ).read_text(encoding="utf-8")
     assert "body.lesson-reading .lesson-content-shell > h1:first-child" in css_content
+    assert ".lesson-content-shell img" in css_content
+    assert "max-width: 100%" in css_content
     assert "data-read-mode" not in css_content
 
     script_content = (
@@ -1039,6 +1041,48 @@ def test_generate_lesson_pages_rewrites_internal_lesson_markdown_links(
 
     assert 'href="002.html"' in html_content
     assert 'href="https://example.com/doc.md"' in html_content
+
+
+def test_generate_lesson_pages_copies_referenced_local_images(
+    sample_learning, sample_config, temp_output_dir, tmp_path, monkeypatch
+):
+    lesson_dir = sample_learning / "lessons" / "foundations"
+    lesson_path = lesson_dir / "001.md"
+    lesson_path.write_text(
+        lesson_path.read_text(encoding="utf-8")
+        + "\n![A local concept strip.](./001-concept-strip.png)\n"
+        + "\n![An external diagram.](https://example.com/diagram.png)\n",
+        encoding="utf-8",
+    )
+    image_bytes = b"local lesson image"
+    (lesson_dir / "001-concept-strip.png").write_bytes(image_bytes)
+    (lesson_dir / "unused.png").write_bytes(b"not published")
+
+    templates_dir = tmp_path / "templates"
+    templates_dir.mkdir()
+    (templates_dir / "lesson.html").write_text("{{ lesson_content }}", encoding="utf-8")
+    monkeypatch.setattr(
+        "mystuff.commands.generate.get_templates_dir", lambda: templates_dir
+    )
+
+    temp_output_dir.mkdir()
+    generate_lesson_pages(
+        temp_output_dir,
+        {
+            "title": "Test Site",
+            "description": "Test description",
+            "author": "Test Author",
+            "menu_items": [],
+        },
+        "2026-04-02",
+    )
+
+    output_lesson_dir = temp_output_dir / "lessons" / "foundations"
+    html_content = (output_lesson_dir / "001.html").read_text(encoding="utf-8")
+    assert 'src="./001-concept-strip.png"' in html_content
+    assert 'src="https://example.com/diagram.png"' in html_content
+    assert (output_lesson_dir / "001-concept-strip.png").read_bytes() == image_bytes
+    assert not (output_lesson_dir / "unused.png").exists()
 
 
 def test_generate_lesson_pages_renders_generated_quote_list(

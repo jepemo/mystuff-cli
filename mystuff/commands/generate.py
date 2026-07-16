@@ -126,6 +126,67 @@ class LessonLinkRewriteExtension(Extension):
         )
 
 
+def resolve_lesson_asset_path(src: str, source_lesson_path: Path) -> Optional[str]:
+    """Resolve a local lesson asset URL within the lessons source tree."""
+    parsed = urlsplit(src)
+    if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith("/"):
+        return None
+
+    source_rel_dir = posixpath.dirname(source_lesson_path.as_posix()) or "."
+    resolved_asset = posixpath.normpath(posixpath.join(source_rel_dir, parsed.path))
+    if resolved_asset == ".." or resolved_asset.startswith("../"):
+        return None
+
+    return resolved_asset
+
+
+class LessonAssetCollectorTreeprocessor(Treeprocessor):
+    """Collect local image assets referenced by rendered lesson Markdown."""
+
+    def __init__(
+        self, md, source_lesson_path: Path, referenced_asset_paths: set[str]
+    ) -> None:
+        super().__init__(md)
+        self.source_lesson_path = source_lesson_path
+        self.referenced_asset_paths = referenced_asset_paths
+
+    def run(self, root):
+        for element in root.iter("img"):
+            src = element.get("src")
+            if not src:
+                continue
+
+            resolved_asset = resolve_lesson_asset_path(src, self.source_lesson_path)
+            if resolved_asset:
+                self.referenced_asset_paths.add(resolved_asset)
+
+        return root
+
+
+class LessonAssetCollectorExtension(Extension):
+    """Markdown extension that finds local images that must be published."""
+
+    def __init__(
+        self,
+        *,
+        source_lesson_path: Path,
+        referenced_asset_paths: set[str],
+        **kwargs,
+    ) -> None:
+        self.source_lesson_path = source_lesson_path
+        self.referenced_asset_paths = referenced_asset_paths
+        super().__init__(**kwargs)
+
+    def extendMarkdown(self, md) -> None:
+        md.treeprocessors.register(
+            LessonAssetCollectorTreeprocessor(
+                md, self.source_lesson_path, self.referenced_asset_paths
+            ),
+            "lesson_asset_collector",
+            14,
+        )
+
+
 def rewrite_track_markdown_link(
     href: str, track_id: str, known_lesson_paths: set[str]
 ) -> str:
@@ -968,27 +1029,72 @@ def render_template(
 
 
 def _render_lesson_markdown(
-    lesson: Dict[str, Any], known_lesson_paths: set[str]
+    lesson: Dict[str, Any],
+    known_lesson_paths: set[str],
+    referenced_asset_paths: Optional[set[str]] = None,
 ) -> str:
     lesson_path = get_mystuff_dir() / "learning" / "lessons" / lesson["path"]
     with open(lesson_path, "r", encoding="utf-8") as handle:
         md_content = handle.read()
 
     _, content_without_frontmatter = extract_frontmatter(md_content)
-    md = markdown.Markdown(
-        extensions=[
-            "fenced_code",
-            "tables",
-            "codehilite",
-            LessonMathExtension(),
-            LessonLinkRewriteExtension(
+    extensions = [
+        "fenced_code",
+        "tables",
+        "codehilite",
+        LessonMathExtension(),
+        LessonLinkRewriteExtension(
+            source_lesson_path=Path(lesson["path"]),
+            known_lesson_paths=known_lesson_paths,
+        ),
+    ]
+    if referenced_asset_paths is not None:
+        extensions.append(
+            LessonAssetCollectorExtension(
                 source_lesson_path=Path(lesson["path"]),
-                known_lesson_paths=known_lesson_paths,
-            ),
-        ],
+                referenced_asset_paths=referenced_asset_paths,
+            )
+        )
+
+    md = markdown.Markdown(
+        extensions=extensions,
         tab_length=2,
     )
     return md.convert(normalize_lesson_markdown(content_without_frontmatter))
+
+
+def copy_lesson_assets(lessons_output: Path, asset_paths: set[str]) -> None:
+    """Copy referenced local lesson images alongside the generated lesson pages."""
+    lessons_source = get_mystuff_dir() / "learning" / "lessons"
+    resolved_source_root = lessons_source.resolve()
+    copied_count = 0
+
+    for asset_path in sorted(asset_paths):
+        source_path = lessons_source / asset_path
+        try:
+            resolved_source = source_path.resolve(strict=True)
+        except FileNotFoundError:
+            console.print(
+                f"[yellow]  ⚠️  Referenced lesson asset not found: {asset_path}[/yellow]"
+            )
+            continue
+
+        if (
+            not resolved_source.is_relative_to(resolved_source_root)
+            or not resolved_source.is_file()
+        ):
+            console.print(
+                f"[yellow]  ⚠️  Skipping invalid lesson asset: {asset_path}[/yellow]"
+            )
+            continue
+
+        output_path = lessons_output / asset_path
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(resolved_source, output_path)
+        copied_count += 1
+
+    if copied_count:
+        console.print(f"  🖼️  Copied {copied_count} lesson image assets")
 
 
 def _relative_output_path(source_path: str) -> str:
@@ -1126,12 +1232,15 @@ def generate_lesson_pages(
     lessons_output.mkdir(exist_ok=True)
     all_lessons = [lesson for track in tracks for lesson in track["lessons"]]
     known_lesson_paths = {lesson["path"] for lesson in all_lessons}
+    referenced_asset_paths: set[str] = set()
 
     console.print(f"  📚 Generating {len(all_lessons)} lesson pages...")
     for track in tracks:
         track_lessons = track["lessons"]
         for index, lesson in enumerate(track_lessons):
-            lesson_html = _render_lesson_markdown(lesson, known_lesson_paths)
+            lesson_html = _render_lesson_markdown(
+                lesson, known_lesson_paths, referenced_asset_paths
+            )
             has_math = 'class="math-' in lesson_html
             prev_lesson_data = track_lessons[index - 1] if index > 0 else None
             next_lesson_data = (
@@ -1189,6 +1298,7 @@ def generate_lesson_pages(
             output_path.parent.mkdir(parents=True, exist_ok=True)
             render_template("lesson.html", context, output_path)
 
+    copy_lesson_assets(lessons_output, referenced_asset_paths)
     console.print(f"  ✅ Generated {len(all_lessons)} lesson pages")
 
 
