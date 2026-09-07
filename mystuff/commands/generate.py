@@ -651,11 +651,23 @@ def _public_tracks(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
 
 
 def _is_track_published(track: Dict[str, Any]) -> bool:
-    return track["status"] == "active" and track.get("public", True)
+    # An active, explicitly public track is visible only once its canonical
+    # lesson prefix is non-empty. A draft or empty track cannot leak through a
+    # stale lesson flag.
+    return (
+        track["status"] == "active"
+        and bool(track.get("public", True))
+        and bool(_public_lessons(track))
+    )
 
 
 def _public_lessons(track: Dict[str, Any]) -> List[Dict[str, Any]]:
-    return [lesson for lesson in track["lessons"] if lesson["public"]]
+    prefix: List[Dict[str, Any]] = []
+    for lesson in track["lessons"]:
+        if not lesson.get("public"):
+            break
+        prefix.append(lesson)
+    return prefix
 
 
 def _public_lesson_status(
@@ -708,11 +720,7 @@ def load_learning_data() -> Optional[Dict[str, Any]]:
         return None
 
     track = catalog["tracks_by_id"][current_lesson["track_id"]]
-    if (
-        track["status"] != "active"
-        or not track.get("public", True)
-        or not current_lesson["public"]
-    ):
+    if not _is_track_published(track) or not current_lesson["public"]:
         return None
 
     return {
@@ -762,42 +770,29 @@ def load_active_learning_data() -> List[Dict[str, Any]]:
         )
         return []
 
-    # Progress comes from the catalog's per-track cursor.  The legacy global
-    # cursor may be used only while attaching progress for old metadata.
-    learning_items: List[Dict[str, Any]] = []
-    for track in catalog["tracks"]:
-        if track["status"] != "active" or track.get("progress_status") != "in_progress":
-            continue
-
-        lesson = _first_open_lesson(track)
-        if not lesson:
-            continue
-
-        is_published = track.get("public", True) and lesson.get("public", True)
-        learning_items.append(
-            {
-                "current_lesson_id": lesson["lesson_id"],
-                "lesson_title": lesson["title"],
-                "lesson_url": lesson["url"] if is_published else None,
-                "track_id": track["track_id"],
-                "track_name": track["name"],
-                "track_description": track.get("description", ""),
-                "track_url": track["url"] if track.get("public", True) else None,
-                "classification_id": track["classification"],
-                "classification_name": track.get("classification_name")
-                or track["classification"].replace("-", " ").title(),
-                "classification_url": (
-                    f"classifications/{track['classification']}.html"
-                    if track.get("public", True)
-                    else None
-                ),
-                "last_opened_at": None,
-                "is_current": lesson.get("progress_status") == "current",
-            }
-        )
-
-    learning_items.sort(key=lambda item: (not item["is_current"], item["track_id"]))
-    return learning_items
+    current = get_current_lesson(metadata, catalog)
+    if not current:
+        return []
+    track = catalog["tracks_by_id"][current["track_id"]]
+    if not _is_track_published(track) or not current.get("public"):
+        return []
+    return [
+        {
+            "current_lesson_id": current["lesson_id"],
+            "lesson_title": current["title"],
+            "lesson_url": current["url"],
+            "track_id": track["track_id"],
+            "track_name": track["name"],
+            "track_description": track.get("description", ""),
+            "track_url": track["url"],
+            "classification_id": track["classification"],
+            "classification_name": track.get("classification_name")
+            or track["classification"].replace("-", " ").title(),
+            "classification_url": f"classifications/{track['classification']}.html",
+            "last_opened_at": metadata.get("last_opened_at"),
+            "is_current": True,
+        }
+    ]
 
 
 def load_all_tracks_with_status() -> List[Dict[str, Any]]:
@@ -816,9 +811,11 @@ def load_all_tracks_with_status() -> List[Dict[str, Any]]:
                 lesson_copy["status"] = _public_lesson_status(
                     lesson_copy,
                     completed_ids,
-                    {track["current_lesson_id"]}
-                    if track.get("current_lesson_id")
-                    else set(),
+                    (
+                        {track["current_lesson_id"]}
+                        if track.get("current_lesson_id")
+                        else set()
+                    ),
                 )
                 lesson_copy["display_title"] = (
                     f"{lesson_copy['sequence_label']}. {lesson_copy['title']}"

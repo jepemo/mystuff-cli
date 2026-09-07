@@ -58,15 +58,15 @@ install-dev: ## Install development dependencies
 
 test: ## Run tests
 	@echo "$(BLUE)Running tests...$(RESET)"
-	uv run pytest tests/ -v
+	uv run python -m pytest tests/ -v
 
 test-coverage: ## Run tests with coverage report
 	@echo "$(BLUE)Running tests with coverage...$(RESET)"
-	uv run pytest tests/ --cov=mystuff --cov-report=term-missing --cov-report=html
+	uv run python -m pytest tests/ --cov=mystuff --cov-report=term-missing --cov-report=html
 
 test-sync: ## Run only sync module tests
 	@echo "$(BLUE)Running sync tests...$(RESET)"
-	uv run pytest tests/test_sync.py -v
+	uv run python -m pytest tests/test_sync.py -v
 
 lint: ## Run all linting checks (black, flake8, mypy)
 	@echo "$(BLUE)Running all linting checks...$(RESET)"
@@ -77,23 +77,23 @@ lint: ## Run all linting checks (black, flake8, mypy)
 
 lint-black: ## Check code formatting with black
 	@echo "$(BLUE)Checking code formatting with black...$(RESET)"
-	uv run black --check --diff mystuff/ tests/
+	uv run python -m black --check --diff mystuff/ tests/
 
 lint-flake8: ## Run flake8 linting
 	@echo "$(BLUE)Running flake8 linting...$(RESET)"
-	uv run flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+	uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
 
 lint-mypy: ## Run mypy type checking
 	@echo "$(BLUE)Running mypy type checking...$(RESET)"
-	uv run mypy mystuff/ --ignore-missing-imports || true
+	uv run python -m mypy mystuff/ --ignore-missing-imports || true
 
 lint-isort: ## Check import sorting with isort
 	@echo "$(BLUE)Checking import sorting with isort...$(RESET)"
-	uv run isort --check-only --diff mystuff/ tests/
+	uv run python -m isort --check-only --diff mystuff/ tests/
 
 fix-imports: ## Remove unused imports automatically
 	@echo "$(BLUE)Removing unused imports...$(RESET)"
-	uv run autoflake --remove-all-unused-imports --recursive --in-place mystuff/ tests/
+	uv run python -m autoflake --remove-all-unused-imports --recursive --in-place mystuff/ tests/
 
 fix-whitespace: ## Fix trailing whitespace and blank lines
 	@echo "$(BLUE)Fixing whitespace issues...$(RESET)"
@@ -109,19 +109,19 @@ fix-all: ## Auto-fix all possible linting issues
 
 lint-ruff: ## Run ruff linting (fast alternative)
 	@echo "$(BLUE)Running ruff linting...$(RESET)"
-	uv run ruff check mystuff/ tests/
+	uv run python -m ruff check mystuff/ tests/
 
 format: ## Auto-format code with black and isort
 	@echo "$(BLUE)Formatting code with black...$(RESET)"
-	uv run black mystuff/ tests/
+	uv run python -m black mystuff/ tests/
 	@echo "$(BLUE)Sorting imports with isort...$(RESET)"
-	uv run isort mystuff/ tests/
+	uv run python -m isort mystuff/ tests/
 	@echo "$(GREEN)Code formatting completed!$(RESET)"
 
 fix: ## Auto-fix code issues where possible
 	@echo "$(BLUE)Auto-fixing code issues...$(RESET)"
 	@$(MAKE) format
-	uv run ruff check --fix mystuff/ tests/ || true
+	uv run python -m ruff check --fix mystuff/ tests/ || true
 	@echo "$(GREEN)Auto-fix completed!$(RESET)"
 
 check: ## Run all checks (format, lint, test) - CI equivalent
@@ -133,13 +133,13 @@ check: ## Run all checks (format, lint, test) - CI equivalent
 check-ci: ## Run checks exactly like GitHub Actions
 	@echo "$(BLUE)Running GitHub Actions equivalent checks...$(RESET)"
 	@echo "$(YELLOW)1. Code formatting (black)...$(RESET)"
-	uv run black --check --diff mystuff/ tests/
+	uv run python -m black --check --diff mystuff/ tests/
 	@echo "$(YELLOW)2. Linting (flake8)...$(RESET)"
-	uv run flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+	uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
 	@echo "$(YELLOW)3. Type checking (mypy)...$(RESET)"
-	uv run mypy mystuff/ --ignore-missing-imports || true
+	uv run python -m mypy mystuff/ --ignore-missing-imports || true
 	@echo "$(YELLOW)4. Running tests...$(RESET)"
-	uv run pytest tests/ -v
+	uv run python -m pytest tests/ -v
 	@echo "$(GREEN)All CI checks completed!$(RESET)"
 
 build: ## Build the package
@@ -182,20 +182,20 @@ dev-setup: ## Complete development setup
 
 # Quick development commands
 quick-test: ## Quick test run (no coverage)
-	@uv run pytest tests/ -x --tb=short
+	@uv run python -m pytest tests/ -x --tb=short
 
 quick-lint: ## Quick lint check (only flake8)
-	@uv run flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+	@uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
 
 # Specific module testing
 test-init: ## Test init module
-	@uv run pytest tests/test_init*.py -v
+	@uv run python -m pytest tests/test_init*.py -v
 
 test-link: ## Test link module
-	@uv run pytest tests/test_link.py -v
+	@uv run python -m pytest tests/test_link.py -v
 
 test-meeting: ## Test meeting module
-	@uv run pytest tests/test_meeting.py -v
+	@uv run python -m pytest tests/test_meeting.py -v
 
 test-all-modules: ## Test all individual modules
 	@echo "$(BLUE)Testing all modules...$(RESET)"

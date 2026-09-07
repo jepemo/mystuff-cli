@@ -12,7 +12,6 @@ from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import yaml
 
-
 WIKI_SCHEMA_VERSION = 1
 SAFE_SLUG_RE = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 SAFE_SOURCE_ID_RE = re.compile(r"^src-[A-Za-z0-9][A-Za-z0-9._-]*$")

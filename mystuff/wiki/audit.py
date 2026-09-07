@@ -9,7 +9,6 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 from mystuff.wiki.index import build_wiki_index, tokenize
 from mystuff.wiki.storage import WikiPaths, iso_now, json_dump, load_source_metadata
 
-
 REQUIRED_FRONTMATTER = {
     "id",
     "title",

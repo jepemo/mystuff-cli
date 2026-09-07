@@ -5,6 +5,7 @@ MyStuff CLI - Learning management functionality
 import datetime
 import os
 import re
+import subprocess
 import tempfile
 import warnings
 import webbrowser
@@ -18,11 +19,18 @@ from rich.console import Console
 from rich.table import Table
 from rich.tree import Tree
 
+from mystuff.ai import (
+    AgentRunnerError,
+    build_codex_exec_command,
+    resolve_agent_settings,
+)
 from mystuff.interactive_selector import select_from_options
+from mystuff.learning_catalog import get_metadata_path  # noqa: F401
 from mystuff.learning_catalog import (
     LearningCatalogError,
     LearningReferenceError,
     attach_progress,
+    extract_frontmatter,
     fresh_metadata_template,
 )
 from mystuff.learning_catalog import get_all_lessons as catalog_get_all_lessons
@@ -32,7 +40,6 @@ from mystuff.learning_catalog import (
     get_current_lesson_ids_by_track,
     get_learning_dir,
     get_lessons_dir,
-    get_metadata_path,
     get_mystuff_dir,
 )
 from mystuff.learning_catalog import get_next_lesson as catalog_get_next_lesson
@@ -850,6 +857,11 @@ def _is_startable_track(track: Dict[str, Any]) -> bool:
     )
 
 
+def _is_startable_for_preparation(track: Dict[str, Any]) -> bool:
+    """A private/draft track can be selected only to prepare it for learning."""
+    return bool(track.get("is_unlocked")) and not track.get("progress_status") == "done"
+
+
 def _ensure_track_is_startable(track: Dict[str, Any], catalog: Dict[str, Any]) -> None:
     if track.get("status") != "active":
         raise LearningReferenceError(f"Track '{track['track_id']}' is not active.")
@@ -857,6 +869,17 @@ def _ensure_track_is_startable(track: Dict[str, Any], catalog: Dict[str, Any]) -
         raise LearningReferenceError(f"Track '{track['track_id']}' is not published.")
     if not track["is_unlocked"]:
         raise LearningReferenceError(_track_lock_message(track, catalog))
+
+
+def _ensure_track_can_be_prepared(
+    track: Dict[str, Any], catalog: Dict[str, Any]
+) -> None:
+    if not track["is_unlocked"]:
+        raise LearningReferenceError(_track_lock_message(track, catalog))
+    if track.get("progress_status") == "done":
+        raise LearningReferenceError(
+            f"Track '{track['track_id']}' is already completed."
+        )
 
 
 def _ensure_lesson_is_startable(
@@ -1111,13 +1134,13 @@ def _plain_track_label(track: Dict[str, Any]) -> str:
 
 
 def _unstarted_track_candidates(catalog: Dict[str, Any]) -> List[Dict[str, Any]]:
-    """Return public, unlocked tracks that have not been started yet."""
+    """Return unlocked tracks, including private drafts to prepare on demand."""
     return [
         track
         for track in catalog["tracks"]
-        if _is_startable_track(track)
+        if _is_startable_for_preparation(track)
         and track["progress_status"] == "not_started"
-        and _visible_lessons(track)
+        and track["lessons"]
     ]
 
 
@@ -1148,9 +1171,9 @@ def _active_lesson_for_track(
 
 
 def _set_active_lesson(metadata: Dict[str, Any], lesson: Dict[str, Any]) -> None:
-    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
-    current_lesson_ids_by_track[lesson["track_id"]] = lesson["lesson_id"]
-    metadata["current_lesson_ids_by_track"] = current_lesson_ids_by_track
+    # v2 is intentionally a one-focus schema.  A focus switch keeps the
+    # completion history but replaces, rather than accumulates, cursors.
+    metadata["current_lesson_ids_by_track"] = {lesson["track_id"]: lesson["lesson_id"]}
     metadata["current_lesson_id"] = lesson["lesson_id"]
 
 
@@ -1161,9 +1184,9 @@ def _ensure_global_current_lesson_is_tracked(
     if not current or current["lesson_id"] in get_completed_lesson_ids(metadata):
         return
 
-    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
-    current_lesson_ids_by_track.setdefault(current["track_id"], current["lesson_id"])
-    metadata["current_lesson_ids_by_track"] = current_lesson_ids_by_track
+    metadata["current_lesson_ids_by_track"] = {
+        current["track_id"]: current["lesson_id"]
+    }
 
 
 def _clear_active_track(
@@ -1172,15 +1195,9 @@ def _clear_active_track(
     *,
     completed_lesson_id: Optional[str] = None,
 ) -> None:
-    current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
-    removed_lesson_id = current_lesson_ids_by_track.pop(track_id, None)
-    metadata["current_lesson_ids_by_track"] = current_lesson_ids_by_track
-
-    if metadata.get("current_lesson_id") in {removed_lesson_id, completed_lesson_id}:
-        metadata["current_lesson_id"] = next(
-            iter(current_lesson_ids_by_track.values()),
-            None,
-        )
+    del track_id, completed_lesson_id
+    metadata["current_lesson_ids_by_track"] = {}
+    metadata["current_lesson_id"] = None
 
 
 def _current_or_pending_lesson_for_track(
@@ -1201,24 +1218,10 @@ def _current_or_pending_lesson_for_track(
 def _active_lesson_candidates(
     catalog: Dict[str, Any], metadata: Dict[str, Any]
 ) -> List[Dict[str, Any]]:
-    lessons: List[Dict[str, Any]] = []
-    seen_lesson_ids = set()
-    for track in catalog["tracks"]:
-        if (
-            track["status"] != "active"
-            or not track["is_unlocked"]
-            or track["progress_status"] != "in_progress"
-        ):
-            continue
-
-        lesson = _current_or_pending_lesson_for_track(track, metadata, catalog)
-        if not lesson or lesson["lesson_id"] in seen_lesson_ids:
-            continue
-
-        lessons.append(lesson)
-        seen_lesson_ids.add(lesson["lesson_id"])
-
-    return lessons
+    current = get_current_lesson(metadata, catalog)
+    if not current or current["lesson_id"] in get_completed_lesson_ids(metadata):
+        return []
+    return [current]
 
 
 def _resolve_track_or_lesson_target(
@@ -1327,6 +1330,171 @@ def _mark_lesson_completed(
         "track_completed": track_completed,
         "suggested_tracks": suggested_tracks,
     }
+
+
+class LessonPreparationError(LearningCatalogError):
+    """The content workflow did not make the requested lesson safe to open."""
+
+
+def _current_lesson_template_version() -> Optional[int]:
+    template_path = (
+        get_learning_dir() / "curriculum" / "templates" / "lesson_template.md"
+    )
+    if not template_path.exists():
+        raise LessonPreparationError(f"Lesson template not found: {template_path}")
+    frontmatter, _ = extract_frontmatter(template_path.read_text(encoding="utf-8"))
+    version = (frontmatter or {}).get("version")
+    try:
+        return int(version)
+    except (TypeError, ValueError):
+        raise LessonPreparationError(
+            f"Lesson template has no valid version: {template_path}"
+        )
+
+
+def _run_learning_prompt(prompt: str, *, dry_run: bool = False) -> None:
+    """Run the write-enabled learning agent using the shared Codex builder."""
+    typer.echo(f"▶ {prompt}")
+    if dry_run:
+        return
+    mystuff_dir = get_mystuff_dir()
+    try:
+        settings = resolve_agent_settings("learning", mystuff_dir)
+        command = build_codex_exec_command(settings, prompt, cwd=mystuff_dir)
+        result = subprocess.run(command, cwd=mystuff_dir, check=False)
+    except FileNotFoundError as exc:
+        raise LessonPreparationError(
+            f"Codex command not found: {exc.filename}"
+        ) from exc
+    except AgentRunnerError as exc:
+        raise LessonPreparationError(str(exc)) from exc
+    if result.returncode:
+        raise LessonPreparationError(
+            f"Codex exited with code {result.returncode}; progress was not changed."
+        )
+
+
+def _track_needs_design(track: Dict[str, Any]) -> bool:
+    """Conservative preflight for tracks explicitly marked as needing design."""
+    return track.get("status") != "active" or bool(track.get("needs_metadata_review"))
+
+
+def _learning_agent_is_configured() -> bool:
+    """Keep legacy, already-public local fixtures usable without an AI setup."""
+    config_path = get_mystuff_dir() / "config.yaml"
+    if not config_path.exists():
+        return False
+    try:
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return False
+    return bool(((config.get("ai") or {}).get("tasks") or {}).get("learning"))
+
+
+def _reload_catalog_with_progress(metadata: Dict[str, Any]) -> Dict[str, Any]:
+    return _attach_progress_or_exit(_load_catalog_or_exit(), metadata)
+
+
+def _plan_track_if_needed(
+    track: Dict[str, Any], metadata: Dict[str, Any], *, force: bool, dry_run: bool
+) -> Dict[str, Any]:
+    # A pre-AI installation can still resume its already-public curriculum.
+    # Real just-in-time workflows always have ai.tasks.learning configured.
+    if force and not _learning_agent_is_configured() and not _track_needs_design(track):
+        return _reload_catalog_with_progress(metadata)
+    if not force and not _track_needs_design(track):
+        return _reload_catalog_with_progress(metadata)
+    typer.echo("⏳ Planning track with Codex…")
+    _run_learning_prompt(
+        f"Planifica/revisa el track {track['track_id']} porque el alumno va a "
+        "empezarlo. "
+        "Déjalo planificado y active, pero no revises en lote sus lecciones.",
+        dry_run=dry_run,
+    )
+    catalog = _reload_catalog_with_progress(metadata)
+    planned = catalog["tracks_by_id"].get(track["track_id"])
+    if not planned or _track_needs_design(planned):
+        raise LessonPreparationError(
+            f"Codex finished but track '{track['track_id']}' is not active and "
+            "structurally ready."
+        )
+    return catalog
+
+
+def _validate_published_prefix(
+    track: Dict[str, Any], expected_lesson_id: str, *, require_current_version: bool
+) -> Dict[str, Any]:
+    expected = next(
+        (
+            lesson
+            for lesson in track["lessons"]
+            if lesson["lesson_id"] == expected_lesson_id
+        ),
+        None,
+    )
+    if not expected:
+        raise LessonPreparationError("The expected lesson disappeared after review.")
+    if not expected.get("public"):
+        raise LessonPreparationError(
+            f"Codex finished without publishing {track['track_id']}/"
+            f"{expected['sequence_label']}."
+        )
+    if expected.get("review_status") != "reviewed":
+        raise LessonPreparationError(
+            f"{track['track_id']}/{expected['sequence_label']} must have "
+            "review_status: reviewed."
+        )
+    if (
+        require_current_version
+        and expected.get("version") != _current_lesson_template_version()
+    ):
+        raise LessonPreparationError(
+            f"{track['track_id']}/{expected['sequence_label']} was published with "
+            "an outdated lesson template version."
+        )
+
+    seen_private = False
+    for lesson in track["lessons"]:
+        if not lesson.get("public"):
+            seen_private = True
+        elif seen_private:
+            raise LessonPreparationError(
+                f"Track '{track['track_id']}' has a gap in its public lesson prefix."
+            )
+    expected_index = track["lessons"].index(expected)
+    if require_current_version and any(
+        lesson.get("public") for lesson in track["lessons"][expected_index + 1 :]
+    ):
+        raise LessonPreparationError(
+            f"Codex published a later lesson while preparing "
+            f"{track['track_id']}/{expected['sequence_label']}."
+        )
+    return expected
+
+
+def _prepare_lesson(
+    lesson: Dict[str, Any], metadata: Dict[str, Any], *, dry_run: bool = False
+) -> tuple[Dict[str, Any], Dict[str, Any]]:
+    """Ensure exactly this next lesson is public, reviewed and current-versioned."""
+    catalog = _reload_catalog_with_progress(metadata)
+    track = catalog["tracks_by_id"][lesson["track_id"]]
+    expected = catalog["lessons_by_id"].get(lesson["lesson_id"])
+    if not expected:
+        raise LessonPreparationError("The requested lesson no longer exists.")
+    was_public = bool(expected.get("public"))
+    if not was_public:
+        typer.echo("⏳ Reviewing next lesson with Codex…")
+        _run_learning_prompt(
+            f"Revisa la siguiente leccion del track {track['track_id']}.",
+            dry_run=dry_run,
+        )
+        typer.echo("⏳ Validating publication…")
+        catalog = _reload_catalog_with_progress(metadata)
+        track = catalog["tracks_by_id"][lesson["track_id"]]
+    validated = _validate_published_prefix(
+        track, lesson["lesson_id"], require_current_version=not was_public
+    )
+    return validated, catalog
 
 
 def _open_lesson_path(lesson: Dict[str, Any], web: bool = False) -> None:
@@ -1659,8 +1827,14 @@ def publish_content(
         typer.Argument(help="Track id, lesson id, or track_id/NNN[.md] to publish"),
     ],
 ):
-    """Set a track or lesson public flag to true for generated sites."""
-    _set_public(reference, True)
+    """Deprecated: lessons are published only by the reviewed-content gate."""
+    del reference
+    typer.echo(
+        "❌ Manual publication is disabled. Start/current/next runs the curriculum gate "
+        + "for the next private lesson.",
+        err=True,
+    )
+    raise typer.Exit(1)
 
 
 @learn_app.command("unpublish")
@@ -1670,8 +1844,30 @@ def unpublish_content(
         typer.Argument(help="Track id, lesson id, or track_id/NNN[.md] to hide"),
     ],
 ):
-    """Set a track or lesson public flag to false for generated sites."""
-    _set_public(reference, False)
+    """Hide a published suffix without creating a public-prefix gap."""
+    catalog = _load_catalog_or_exit()
+    try:
+        lesson = resolve_lesson_reference(reference, catalog)
+    except LearningReferenceError:
+        typer.echo(
+            "❌ Tracks derive publication from their lessons; unpublish a lesson suffix.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    track = catalog["tracks_by_id"][lesson["track_id"]]
+    later_public = any(
+        item.get("public")
+        for item in track["lessons"]
+        if item["sequence"] > lesson["sequence"]
+    )
+    if later_public:
+        typer.echo(
+            "❌ Refusing to create a publication gap. Unpublish the latest public lesson first.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    _rewrite_frontmatter_field(get_lessons_dir() / lesson["path"], "public", False)
+    typer.echo(f"✅ Hidden lesson {lesson['track_id']}/{lesson['sequence_label']}.")
 
 
 @learn_app.command("current")
@@ -1691,6 +1887,12 @@ def open_current_lesson(
             help="Use the native fuzzy selector when selecting a lesson",
         ),
     ] = True,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show any needed agent prompt without running it"
+        ),
+    ] = False,
 ):
     """Open an active lesson using the configured editor or website."""
     metadata = _load_metadata_or_exit()
@@ -1708,10 +1910,31 @@ def open_current_lesson(
             typer.echo("❌ No active lessons found. Use 'mystuff learn start' first.")
             raise typer.Exit(1)
 
+    global_current = get_current_lesson(metadata, catalog)
+    if not global_current or current["lesson_id"] != global_current["lesson_id"]:
+        typer.echo(
+            "❌ 'learn current' can only open the single active cursor.", err=True
+        )
+        raise typer.Exit(1)
+
+    try:
+        catalog = _plan_track_if_needed(
+            catalog["tracks_by_id"][current["track_id"]],
+            metadata,
+            force=False,
+            dry_run=dry_run,
+        )
+        current = catalog["lessons_by_id"][current["lesson_id"]]
+        current, catalog = _prepare_lesson(current, metadata, dry_run=dry_run)
+    except LessonPreparationError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
+
     _ensure_global_current_lesson_is_tracked(metadata, catalog)
     _set_active_lesson(metadata, current)
     metadata["last_opened_at"] = datetime.datetime.now().isoformat()
     _save_metadata_or_exit(metadata)
+    typer.echo("✅ Lesson ready; opening.")
     _open_lesson_path(current, web=web)
 
 
@@ -1978,6 +2201,12 @@ def next_lesson(
             help="Use the native fuzzy selector when selecting a lesson",
         ),
     ] = True,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show any needed agent prompt without running it"
+        ),
+    ] = False,
 ):
     """Complete an active lesson and advance within the same track."""
     metadata = _load_metadata_or_exit()
@@ -1993,6 +2222,21 @@ def next_lesson(
         current = _select_active_lesson(catalog, metadata, use_selector=selector)
         if not current:
             typer.echo("❌ No active lessons found. Use 'mystuff learn start' first.")
+            raise typer.Exit(1)
+
+    global_current = get_current_lesson(metadata, catalog)
+    if not global_current or current["lesson_id"] != global_current["lesson_id"]:
+        typer.echo(
+            "❌ 'learn next' can only advance the single active cursor.", err=True
+        )
+        raise typer.Exit(1)
+
+    next_item = catalog_get_next_lesson(current["lesson_id"], metadata, catalog)
+    if next_item:
+        try:
+            next_item, catalog = _prepare_lesson(next_item, metadata, dry_run=dry_run)
+        except LessonPreparationError as exc:
+            typer.echo(f"❌ {exc}", err=True)
             raise typer.Exit(1)
 
     result = _complete_lesson_and_advance(current, metadata, catalog)
@@ -2034,6 +2278,12 @@ def start_lesson(
             help="Use the native fuzzy selector when selecting a track",
         ),
     ] = True,
+    dry_run: Annotated[
+        bool,
+        typer.Option(
+            "--dry-run", help="Show planning/review prompts without running Codex"
+        ),
+    ] = False,
 ):
     """Start or resume a track-aware lesson flow."""
     metadata = _load_metadata_or_exit()
@@ -2052,12 +2302,64 @@ def start_lesson(
         lesson = selected_track["track_id"]
 
     try:
-        target_lesson = _resolve_start_target(lesson, catalog, metadata)
+        if str(lesson) in catalog["lessons_by_id"] or "/" in str(lesson):
+            requested = resolve_lesson_reference(str(lesson), catalog)
+            target_track = catalog["tracks_by_id"][requested["track_id"]]
+        else:
+            target_track = resolve_track_reference(str(lesson), catalog)
+        _ensure_track_can_be_prepared(target_track, catalog)
     except LearningReferenceError as exc:
         typer.echo(f"❌ {exc}", err=True)
         raise typer.Exit(1)
 
-    _ensure_global_current_lesson_is_tracked(metadata, catalog)
+    current = get_current_lesson(metadata, catalog)
+    if (
+        current
+        and current["track_id"] != target_track["track_id"]
+        and current["lesson_id"] not in get_completed_lesson_ids(metadata)
+        and not typer.confirm(
+            f"Switch focus from '{current['track_id']}' to '{target_track['track_id']}'?",
+            default=False,
+        )
+    ):
+        typer.echo("Focus unchanged.")
+        raise typer.Exit()
+
+    completed_ids = get_completed_lesson_ids(metadata)
+    previously_started = bool(target_track.get("completed_count")) or (
+        current is not None and current["track_id"] == target_track["track_id"]
+    )
+    if (
+        not _learning_agent_is_configured()
+        and not previously_started
+        and not target_track.get("public", True)
+    ):
+        typer.echo(
+            "❌ Track is not published and no learning agent is configured to prepare it.",
+            err=True,
+        )
+        raise typer.Exit(1)
+    try:
+        catalog = _plan_track_if_needed(
+            target_track, metadata, force=not previously_started, dry_run=dry_run
+        )
+        target_track = catalog["tracks_by_id"][target_track["track_id"]]
+        if target_track["status"] != "active":
+            raise LessonPreparationError(
+                f"Track '{target_track['track_id']}' is still not active after planning."
+            )
+        target_lesson = _first_pending_lesson(target_track, completed_ids)
+        if not target_lesson:
+            raise LessonPreparationError(
+                f"Track '{target_track['track_id']}' has no pending lessons."
+            )
+        target_lesson, catalog = _prepare_lesson(
+            target_lesson, metadata, dry_run=dry_run
+        )
+    except LessonPreparationError as exc:
+        typer.echo(f"❌ {exc}", err=True)
+        raise typer.Exit(1)
+
     _set_active_lesson(metadata, target_lesson)
     _save_metadata_or_exit(metadata)
     typer.echo(

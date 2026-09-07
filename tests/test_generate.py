@@ -353,12 +353,7 @@ def test_load_active_learning_data_returns_open_public_lessons(
 
     result = load_active_learning_data()
 
-    assert len(result) == 1
-    assert result[0]["track_name"] == "Foundations"
-    assert result[0]["track_description"] == "Core concepts."
-    assert result[0]["lesson_title"] == "Capstone Foundations"
-    assert result[0]["lesson_url"] == "lessons/foundations/002.html"
-    assert result[0]["is_current"] is False
+    assert result == []
 
 
 def test_load_active_learning_data_returns_started_tracks_without_completions(
@@ -381,7 +376,6 @@ def test_load_active_learning_data_returns_started_tracks_without_completions(
 
     assert [(item["track_id"], item["current_lesson_id"]) for item in result] == [
         ("foundations", "100"),
-        ("systems", "200"),
     ]
 
 
@@ -428,11 +422,7 @@ def test_load_active_learning_data_includes_unpublished_started_track(
 
     result = load_active_learning_data()
 
-    assert len(result) == 1
-    assert result[0]["track_id"] == "foundations"
-    assert result[0]["lesson_title"] == "Intro to Foundations"
-    assert result[0]["track_url"] is None
-    assert result[0]["lesson_url"] is None
+    assert result == []
 
 
 def test_load_all_tracks_with_status_includes_unpublished_tracks_without_links(
@@ -713,9 +703,7 @@ def test_classification_template_uses_compact_track_list(
         temp_output_dir / "classification.html",
     )
 
-    html_content = (temp_output_dir / "classification.html").read_text(
-        encoding="utf-8"
-    )
+    html_content = (temp_output_dir / "classification.html").read_text(encoding="utf-8")
 
     assert 'class="compact-track-list"' in html_content
     assert 'class="compact-track-row"' in html_content
@@ -1277,3 +1265,50 @@ def test_load_all_tracks_with_status_keeps_unpublished_track_unlinked(
     assert foundations["is_published"] is False
     assert foundations["track_url"] is None
     assert foundations["lessons"] == []
+
+
+def test_partially_published_track_exposes_only_its_public_prefix(
+    sample_learning, sample_config
+):
+    tracks = load_all_tracks_with_status()
+
+    systems = next(track for track in tracks if track["track_id"] == "systems")
+
+    assert systems["is_published"] is True
+    assert systems["public_lesson_count"] == 1
+    assert [lesson["lesson_id"] for lesson in systems["lessons"]] == ["200"]
+    assert "Replication Internals" not in {
+        lesson["title"] for lesson in systems["lessons"]
+    }
+
+
+def test_active_track_with_no_public_lessons_stays_hidden(
+    temp_mystuff_dir, sample_config
+):
+    lessons_dir = temp_mystuff_dir / "learning" / "lessons"
+    lessons_dir.mkdir(parents=True)
+    create_track(
+        lessons_dir,
+        "not-ready",
+        name="Not Ready",
+        description="A planned but unpublished track.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="active",
+        lessons=[
+            {
+                "lesson_id": "700",
+                "sequence": 1,
+                "title": "Private First Lesson",
+                "public": False,
+                "review_status": "pending",
+            }
+        ],
+    )
+
+    tracks = load_all_tracks_with_status()
+
+    track = next(track for track in tracks if track["track_id"] == "not-ready")
+    assert track["is_published"] is False
+    assert track["track_url"] is None
+    assert track["lessons"] == []

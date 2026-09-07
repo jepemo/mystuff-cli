@@ -235,9 +235,7 @@ def test_remove_page_by_id_deletes_unshared_raw_source_and_unwraps_links(tmp_pat
     source = capture_local_file(paths, source_file)
     write_markdown(
         paths.content / "disposable.md",
-        page_metadata(
-            "disposable", "Disposable", sources=[source["source_id"]]
-        ),
+        page_metadata("disposable", "Disposable", sources=[source["source_id"]]),
         "# Disposable\n\nA page that can be removed.",
     )
     index_page = load_markdown(paths.content / "index.md")

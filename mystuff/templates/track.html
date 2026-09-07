@@ -21,7 +21,7 @@
   {% if track.canonical_question %}
   <p class="track-canonical-question">{{ track.canonical_question }}</p>
   {% endif %}
-  <p>{{ track.public_lesson_count }} lessons</p>
+  <p>{{ track.public_lesson_count }} available{% if track.target_lesson_count and track.target_lesson_count != track.public_lesson_count %} / {{ track.target_lesson_count }} planned{% endif %}</p>
   {% if track.continuation_tracks %}
   <p class="track-continuations">
     <span class="meta">Continues to</span>

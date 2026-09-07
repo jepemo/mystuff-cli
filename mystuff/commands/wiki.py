@@ -344,19 +344,17 @@ def remove_synthesized_wiki_page(
     typer.echo(f"Page: {plan['id']} ({plan['slug']})")
     typer.echo(f"Raw sources to delete: {len(plan['sources_to_delete'])}")
     if plan["shared_sources"]:
-        typer.echo(
-            f"Shared sources preserved: {len(plan['shared_sources'])}"
-        )
+        typer.echo(f"Shared sources preserved: {len(plan['shared_sources'])}")
         for source_id, users in plan["shared_sources"].items():
             typer.echo(f"  {source_id}: used by {', '.join(users)}")
     if plan["incoming_pages"]:
-        typer.echo(
-            f"Incoming links to unwrap: {len(plan['incoming_pages'])}"
-        )
+        typer.echo(f"Incoming links to unwrap: {len(plan['incoming_pages'])}")
     if dry_run:
         typer.echo("Status: dry-run")
         return
-    if not force and not typer.confirm(f"Remove '{plan['title']}' and unused raw data?"):
+    if not force and not typer.confirm(
+        f"Remove '{plan['title']}' and unused raw data?"
+    ):
         typer.echo("Removal cancelled.")
         return
     try:

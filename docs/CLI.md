@@ -668,9 +668,10 @@ mystuff learn list [OPTIONS]
 
 #### `mystuff learn start`
 
-Start or resume a published track, lesson path, or lesson id. Without a
-reference, it opens an interactive selector for published tracks you have not
-started yet.
+Start or resume one learning track. A first start may select a private or draft
+track whose dependencies are complete: the learning agent plans it, then
+reviews and publishes only lesson 001. Switching focus asks for confirmation
+and preserves completed-history.
 
 ```bash
 mystuff learn start [OPTIONS] [LESSON]
@@ -688,13 +689,14 @@ mystuff learn start foundations/001
 mystuff learn start 438
 ```
 
-When you pass a track id, `mystuff learn start` resumes that track from the
-first pending published lesson. Unpublished tracks and lessons are rejected.
+When you pass a track id, `mystuff learn start` resumes from its first
+uncompleted lesson. It never makes a cursor active until that lesson has passed
+the reviewed-publication gate.
 
 #### `mystuff learn current`
 
-Open an active lesson in your editor or published website. Without a reference,
-it opens an interactive selector for active lessons.
+Open the single active lesson in your editor or published website. If it is the
+next private lesson, it is reviewed and validated immediately before opening.
 
 ```bash
 mystuff learn current [REFERENCE] [--web]
@@ -707,8 +709,10 @@ mystuff learn current [REFERENCE] [--web]
 
 #### `mystuff learn next`
 
-Complete an active lesson and move to the next pending lesson in the same track.
-Without a reference, it opens an interactive selector for active lessons.
+Complete the single active lesson and move within the same track. The next
+lesson is reviewed and validated before progress is written, so a failed review
+leaves the current lesson unchanged. `learn complete` remains the explicit
+operation that records completion without this advance-and-prepare step.
 
 ```bash
 mystuff learn next [REFERENCE] [--web]

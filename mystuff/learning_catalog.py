@@ -262,6 +262,7 @@ def _load_lesson(
         "estimated_time": _normalize_optional_int(frontmatter.get("estimated_time")),
         "public": _normalize_bool(frontmatter.get("public"), default=True),
         "review_status": str(frontmatter.get("review_status") or "").strip() or None,
+        "version": _normalize_optional_int(frontmatter.get("version")),
         "lesson_kind": str(frontmatter.get("lesson_kind") or "").strip() or "lesson",
         "capstone_scope": str(frontmatter.get("capstone_scope") or "").strip() or None,
         "depends_on_tracks": _normalize_string_list(
@@ -580,13 +581,38 @@ def load_metadata() -> Dict[str, Any]:
         if str(track_id).strip() and str(lesson_id).strip()
     }
 
+    # Schema v2 originally allowed one cursor per track.  Its current meaning is
+    # one learner focus: retain the entry that agrees with the global cursor,
+    # otherwise retain the lexicographically first track id.  This is stable
+    # across machines and, importantly, never turns discarded cursors into
+    # completed lessons.
+    global_current = (
+        str(raw_metadata.get("current_lesson_id")).strip()
+        if raw_metadata.get("current_lesson_id") is not None
+        else None
+    )
+    if len(current_lesson_ids_by_track) > 1:
+        matching_track_ids = sorted(
+            track_id
+            for track_id, lesson_id in current_lesson_ids_by_track.items()
+            if lesson_id == global_current
+        )
+        retained_track_id = (
+            matching_track_ids[0]
+            if matching_track_ids
+            else sorted(current_lesson_ids_by_track)[0]
+        )
+        current_lesson_ids_by_track = {
+            retained_track_id: current_lesson_ids_by_track[retained_track_id]
+        }
+    if current_lesson_ids_by_track and not global_current:
+        # The map is the canonical representation even for old v2 files whose
+        # global field had drifted.
+        global_current = next(iter(current_lesson_ids_by_track.values()))
+
     metadata = {
         "schema_version": METADATA_SCHEMA_VERSION,
-        "current_lesson_id": (
-            str(raw_metadata.get("current_lesson_id")).strip()
-            if raw_metadata.get("current_lesson_id") is not None
-            else None
-        ),
+        "current_lesson_id": global_current,
         "current_lesson_ids_by_track": current_lesson_ids_by_track,
         "last_opened_at": (
             str(raw_metadata.get("last_opened_at")).strip()
@@ -604,10 +630,38 @@ def save_metadata(metadata: Dict[str, Any]) -> None:
     ensure_learning_structure()
     metadata_path = get_metadata_path()
 
+    raw_cursors = metadata.get("current_lesson_ids_by_track") or {}
+    cursors = (
+        {
+            str(track_id).strip(): str(lesson_id).strip()
+            for track_id, lesson_id in raw_cursors.items()
+            if str(track_id).strip() and str(lesson_id).strip()
+        }
+        if isinstance(raw_cursors, dict)
+        else {}
+    )
+    if len(cursors) > 1:
+        # Keep save operations safe even when an external caller supplied an
+        # old concurrent-cursor payload.  load_metadata documents the same
+        # deterministic migration rule.
+        global_current = str(metadata.get("current_lesson_id") or "").strip()
+        matching = sorted(
+            track_id
+            for track_id, lesson_id in cursors.items()
+            if lesson_id == global_current
+        )
+        retained = matching[0] if matching else sorted(cursors)[0]
+        cursors = {retained: cursors[retained]}
+    # A map-less global cursor is a supported legacy v2 input.  Catalog-aware
+    # callers normalize it to its owning track before making progress changes.
+    current_lesson_id = next(
+        iter(cursors.values()),
+        metadata.get("current_lesson_id") if not cursors else None,
+    )
     payload = {
         "schema_version": METADATA_SCHEMA_VERSION,
-        "current_lesson_id": metadata.get("current_lesson_id"),
-        "current_lesson_ids_by_track": metadata.get("current_lesson_ids_by_track", {}),
+        "current_lesson_id": current_lesson_id,
+        "current_lesson_ids_by_track": cursors,
         "last_opened_at": metadata.get("last_opened_at"),
         "completed_lessons": metadata.get("completed_lessons", []),
     }
@@ -640,11 +694,21 @@ def get_current_lesson_ids_by_track(metadata: Dict[str, Any]) -> Dict[str, str]:
     raw_current = metadata.get("current_lesson_ids_by_track") or {}
     if not isinstance(raw_current, dict):
         return {}
-    return {
+    cursors = {
         str(track_id).strip(): str(lesson_id).strip()
         for track_id, lesson_id in raw_current.items()
         if str(track_id).strip() and str(lesson_id).strip()
     }
+    if len(cursors) <= 1:
+        return cursors
+    global_current = str(metadata.get("current_lesson_id") or "").strip()
+    matching = sorted(
+        track_id
+        for track_id, lesson_id in cursors.items()
+        if lesson_id == global_current
+    )
+    retained = matching[0] if matching else sorted(cursors)[0]
+    return {retained: cursors[retained]}
 
 
 def is_track_completed(track: Dict[str, Any], completed_lesson_ids: set) -> bool:
@@ -672,6 +736,18 @@ def attach_progress(
     completed_lesson_ids = get_completed_lesson_ids(metadata)
     completed_track_ids = _completed_track_ids(catalog["tracks"], completed_lesson_ids)
     current_lesson_ids_by_track = get_current_lesson_ids_by_track(metadata)
+    global_current_lesson = catalog["lessons_by_id"].get(
+        str(metadata.get("current_lesson_id") or "")
+    )
+    if global_current_lesson:
+        # For old v2 metadata whose two cursor forms disagree, the global
+        # cursor wins when it names a real lesson.  This is the documented
+        # deterministic migration rule.
+        current_lesson_ids_by_track = {
+            global_current_lesson["track_id"]: global_current_lesson["lesson_id"]
+        }
+        metadata["current_lesson_id"] = global_current_lesson["lesson_id"]
+        metadata["current_lesson_ids_by_track"] = dict(current_lesson_ids_by_track)
     # Schema v2 initially stored a single global cursor.  Honour it only for
     # old metadata that has not acquired a per-track cursor yet; once a track
     # cursor exists it is the source of truth.

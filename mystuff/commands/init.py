@@ -141,7 +141,7 @@ def init(
                         "model": None,
                         "reasoning_effort": None,
                         "profile": None,
-                    }
+                    },
                 },
                 "tasks": {
                     "learning": {"provider": "codex"},
@@ -158,7 +158,7 @@ def init(
                     # cannot be read directly. Supported placeholders:
                     # {url}, {username}, and {status_id}.
                     "resolvers": {"x": []},
-                }
+                },
             },
             "sync": {"commands": ['echo "Sync data"']},
         }

@@ -7,7 +7,6 @@ from typing import Any, Dict, Iterable, List, Optional
 from mystuff.ai import load_mystuff_config, run_structured_agent
 from mystuff.wiki.storage import WikiPaths, load_source_metadata
 
-
 PAGE_TYPES = ["concept", "mechanism", "reference", "map", "practice"]
 FRESHNESS_TYPES = ["stable", "evolving", "volatile"]
 

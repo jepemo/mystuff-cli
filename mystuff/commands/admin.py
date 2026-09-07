@@ -14,7 +14,11 @@ from typing import Annotated, Any, Dict, List, Optional
 
 import typer
 
-from mystuff.ai import AgentRunnerError, resolve_agent_settings
+from mystuff.ai import (
+    AgentRunnerError,
+    build_codex_exec_command,
+    resolve_agent_settings,
+)
 from mystuff.learning_catalog import (
     LearningCatalogError,
     LearningReferenceError,
@@ -74,9 +78,7 @@ def _lesson_sort_key(lesson: Dict[str, Any]) -> tuple:
 
 
 def _next_pending_lesson(tracks: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
-    pending_lessons = [
-        lesson for track in tracks for lesson in _pending_lessons(track)
-    ]
+    pending_lessons = [lesson for track in tracks for lesson in _pending_lessons(track)]
     if not pending_lessons:
         return None
 
@@ -281,12 +283,7 @@ def _run_codex_prompt(
     except AgentRunnerError as exc:
         typer.echo(f"❌ {exc}", err=True)
         raise typer.Exit(1)
-    command = list(settings.command) + ["exec"]
-    if settings.model:
-        command.extend(["--model", settings.model])
-    if settings.profile:
-        command.extend(["--profile", settings.profile])
-    command.append(prompt)
+    command = build_codex_exec_command(settings, prompt, cwd=get_mystuff_dir())
 
     started_at = time.time()
     try:
@@ -411,7 +408,9 @@ def review_track(
 def review_lesson(
     track_id: Annotated[
         Optional[str],
-        typer.Option("--track-id", help="Track id whose next lesson should be reviewed"),
+        typer.Option(
+            "--track-id", help="Track id whose next lesson should be reviewed"
+        ),
     ] = None,
     codex_command: Annotated[
         str, typer.Option("--codex-command", help="Codex executable to run")

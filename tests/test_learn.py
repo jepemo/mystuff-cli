@@ -358,16 +358,13 @@ def test_start_track_preserves_other_started_tracks(temp_learning_dir):
     runner = CliRunner()
 
     first = runner.invoke(app, ["learn", "start", "foundations"], input="n\n")
-    second = runner.invoke(app, ["learn", "start", "databases"], input="n\n")
+    second = runner.invoke(app, ["learn", "start", "databases"], input="y\nn\n")
 
     assert first.exit_code == 0
     assert second.exit_code == 0
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "300"
-    assert metadata["current_lesson_ids_by_track"] == {
-        "foundations": "100",
-        "databases": "300",
-    }
+    assert metadata["current_lesson_ids_by_track"] == {"databases": "300"}
 
 
 def test_start_track_preserves_legacy_global_current_lesson(temp_learning_dir):
@@ -400,15 +397,12 @@ def test_start_track_preserves_legacy_global_current_lesson(temp_learning_dir):
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["learn", "start", "foundations"], input="n\n")
+    result = runner.invoke(app, ["learn", "start", "foundations"], input="y\nn\n")
 
     assert result.exit_code == 0
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
-    assert metadata["current_lesson_ids_by_track"] == {
-        "databases": "300",
-        "foundations": "100",
-    }
+    assert metadata["current_lesson_ids_by_track"] == {"foundations": "100"}
 
 
 def test_start_rejects_unpublished_track(temp_learning_dir):
@@ -439,7 +433,9 @@ def test_start_rejects_unpublished_track(temp_learning_dir):
     assert load_metadata()["current_lesson_id"] is None
 
 
-def test_start_rejects_unpublished_lesson(temp_learning_dir):
+def test_start_with_private_lesson_reference_starts_at_first_pending_lesson(
+    temp_learning_dir,
+):
     lesson_path = temp_learning_dir / "lessons" / "foundations" / "002.md"
     lesson_path.write_text(
         lesson_path.read_text(encoding="utf-8").replace(
@@ -449,11 +445,10 @@ def test_start_rejects_unpublished_lesson(temp_learning_dir):
     )
     runner = CliRunner()
 
-    result = runner.invoke(app, ["learn", "start", "foundations/002"])
+    result = runner.invoke(app, ["learn", "start", "foundations/002"], input="n\n")
 
-    assert result.exit_code == 1
-    assert "not published" in result.output
-    assert load_metadata()["current_lesson_id"] is None
+    assert result.exit_code == 0
+    assert load_metadata()["current_lesson_id"] == "100"
 
 
 def test_start_without_argument_selects_unstarted_track(temp_learning_dir):
@@ -481,9 +476,10 @@ def test_start_without_argument_selects_unstarted_track(temp_learning_dir):
 
     assert result.exit_code == 0
     assert "Start track" in result.output
-    assert "Private API" not in result.output
+    assert "Private API" in result.output
     metadata = load_metadata()
     assert metadata["current_lesson_id"] == "100"
+
 
 def test_track_without_argument_selects_active_track(temp_learning_dir):
     runner = CliRunner()
@@ -886,24 +882,24 @@ def test_convert_markdown_to_html_preserves_and_loads_tex_math(temp_learning_dir
     Path(html_path).unlink()
 
 
-def test_unpublish_lesson_updates_public_frontmatter(temp_learning_dir):
+def test_unpublish_rejects_a_lesson_that_would_create_a_gap(temp_learning_dir):
     runner = CliRunner()
 
     result = runner.invoke(app, ["learn", "unpublish", "foundations/001"])
 
-    assert result.exit_code == 0
+    assert result.exit_code == 1
+    assert "publication gap" in result.output
     lesson_path = temp_learning_dir / "lessons" / "foundations" / "001.md"
-    assert "public: false" in lesson_path.read_text(encoding="utf-8")
+    assert "public: true" in lesson_path.read_text(encoding="utf-8")
 
 
-def test_publish_track_updates_public_frontmatter(temp_learning_dir):
+def test_publish_track_is_disabled_outside_the_review_gate(temp_learning_dir):
     runner = CliRunner()
 
     result = runner.invoke(app, ["learn", "publish", "systems"])
 
-    assert result.exit_code == 0
-    track_path = temp_learning_dir / "lessons" / "systems" / "TRACK.md"
-    assert "public: true" in track_path.read_text(encoding="utf-8")
+    assert result.exit_code == 1
+    assert "Manual publication is disabled" in result.output
 
 
 def test_admin_review_next_finds_pending_lesson(temp_learning_dir):
@@ -995,7 +991,13 @@ def test_admin_review_track_runs_plan_and_lesson_prompts(
     assert result.exit_code == 0
     assert calls == [
         (
-            ["fake-codex", "exec", "Planifica/revisa el track draft-review."],
+            [
+                "fake-codex",
+                "exec",
+                "--cd",
+                str(temp_learning_dir.parent),
+                "Planifica/revisa el track draft-review.",
+            ],
             temp_learning_dir.parent,
             True,
         ),
@@ -1003,6 +1005,8 @@ def test_admin_review_track_runs_plan_and_lesson_prompts(
             [
                 "fake-codex",
                 "exec",
+                "--cd",
+                str(temp_learning_dir.parent),
                 "Revisa la siguiente leccion del track draft-review.",
             ],
             temp_learning_dir.parent,
@@ -1129,3 +1133,156 @@ def test_admin_show_tracks_review_queues(temp_learning_dir):
     assert in_review.exit_code == 0
     assert "draft-in-review" in in_review.output
     assert "unstarted-draft" not in in_review.output
+
+
+def test_metadata_v2_normalizes_multiple_cursors_to_global_current(
+    temp_learning_dir,
+):
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "200",
+            "current_lesson_ids_by_track": {"foundations": "100", "systems": "200"},
+            "last_opened_at": None,
+            "completed_lessons": [{"lesson_id": "100", "completed_at": "2026-01-01"}],
+        }
+    )
+
+    metadata = load_metadata()
+
+    assert metadata["current_lesson_id"] == "200"
+    assert metadata["current_lesson_ids_by_track"] == {"systems": "200"}
+    assert metadata["completed_lessons"] == [
+        {"lesson_id": "100", "completed_at": "2026-01-01"}
+    ]
+
+
+def test_start_plans_then_reviews_before_setting_cursor(temp_learning_dir, monkeypatch):
+    lessons_dir = temp_learning_dir / "lessons"
+    create_track(
+        lessons_dir,
+        "just-in-time",
+        name="Just In Time",
+        description="Prepared only when started.",
+        classification="systems-thinking",
+        depends_on_tracks=[],
+        status="draft",
+        public=True,
+        lessons=[
+            {
+                "lesson_id": "300",
+                "sequence": 1,
+                "title": "Prepared Lesson",
+                "public": False,
+                "review_status": "pending",
+            }
+        ],
+    )
+    (temp_learning_dir / "curriculum" / "templates").mkdir(parents=True)
+    write_markdown_with_frontmatter(
+        temp_learning_dir / "curriculum" / "templates" / "lesson_template.md",
+        {"version": 14},
+        "# Template\n",
+    )
+    (temp_learning_dir.parent / "config.yaml").write_text(
+        (
+            "ai:\n  tasks:\n    learning:\n      model: gpt-5.6-sol\n"
+            "      reasoning_effort: max\n"
+        ),
+        encoding="utf-8",
+    )
+    prompts = []
+
+    def fake_agent(prompt, *, dry_run=False):
+        prompts.append(prompt)
+        if prompt.startswith("Planifica"):
+            path = lessons_dir / "just-in-time" / "TRACK.md"
+            path.write_text(
+                path.read_text(encoding="utf-8").replace(
+                    "status: draft", "status: active"
+                ),
+                encoding="utf-8",
+            )
+            return
+        lesson_path = lessons_dir / "just-in-time" / "001.md"
+        learn_command._rewrite_frontmatter_field(
+            lesson_path, "review_status", "reviewed"
+        )
+        learn_command._rewrite_frontmatter_field(lesson_path, "version", 14)
+        learn_command._rewrite_frontmatter_field(lesson_path, "public", True)
+
+    monkeypatch.setattr(learn_command, "_run_learning_prompt", fake_agent)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "start", "just-in-time"], input="n\n")
+
+    assert result.exit_code == 0
+    assert prompts[0].startswith("Planifica/revisa el track just-in-time")
+    assert prompts[1] == "Revisa la siguiente leccion del track just-in-time."
+    assert load_metadata()["current_lesson_ids_by_track"] == {"just-in-time": "300"}
+
+
+def test_next_leaves_cursor_unchanged_when_review_fails(temp_learning_dir, monkeypatch):
+    lesson_path = temp_learning_dir / "lessons" / "foundations" / "002.md"
+    learn_command._rewrite_frontmatter_field(lesson_path, "public", False)
+    learn_command._rewrite_frontmatter_field(lesson_path, "review_status", "pending")
+    save_metadata(
+        {
+            "schema_version": 2,
+            "current_lesson_id": "100",
+            "current_lesson_ids_by_track": {"foundations": "100"},
+            "last_opened_at": None,
+            "completed_lessons": [],
+        }
+    )
+
+    def failed_agent(prompt, *, dry_run=False):
+        raise learn_command.LessonPreparationError("review failed")
+
+    monkeypatch.setattr(learn_command, "_run_learning_prompt", failed_agent)
+    runner = CliRunner()
+
+    result = runner.invoke(app, ["learn", "next"], input="1\n")
+
+    assert result.exit_code == 1
+    metadata = load_metadata()
+    assert metadata["current_lesson_ids_by_track"] == {"foundations": "100"}
+    assert metadata["completed_lessons"] == []
+
+
+def test_learning_runner_uses_configured_model_reasoning_and_working_directory(
+    temp_learning_dir, monkeypatch
+):
+    (temp_learning_dir.parent / "config.yaml").write_text(
+        (
+            "ai:\n  tasks:\n    learning:\n      model: gpt-5.6-sol\n"
+            "      reasoning_effort: max\n"
+        ),
+        encoding="utf-8",
+    )
+    captured = {}
+
+    class Result:
+        returncode = 0
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["cwd"] = kwargs["cwd"]
+        return Result()
+
+    monkeypatch.setattr(learn_command.subprocess, "run", fake_run)
+
+    learn_command._run_learning_prompt("prepare lesson")
+
+    assert captured["command"] == [
+        "codex",
+        "exec",
+        "--model",
+        "gpt-5.6-sol",
+        "--config",
+        'model_reasoning_effort="max"',
+        "--cd",
+        str(temp_learning_dir.parent),
+        "prepare lesson",
+    ]
+    assert captured["cwd"] == temp_learning_dir.parent

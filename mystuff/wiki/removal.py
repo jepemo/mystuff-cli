@@ -74,9 +74,7 @@ def _unlink_page(body: str, record: Dict[str, Any], target: Dict[str, Any]) -> s
         href = str(link.get("href") or "")
         label = str(link.get("label") or target.get("title") or "")
         token = href if href.startswith("[[") else f"[{label}]({href})"
-        standalone = re.compile(
-            rf"^\s*(?:[-*+]|\d+\.)\s*{re.escape(token)}\s*$"
-        )
+        standalone = re.compile(rf"^\s*(?:[-*+]|\d+\.)\s*{re.escape(token)}\s*$")
         lines = [
             line.replace(token, label)
             for line in lines
@@ -124,7 +122,9 @@ def plan_page_removal(paths: WikiPaths, identifier: str) -> Dict[str, Any]:
     source_users: Dict[str, List[str]] = {}
     for source_id in target.get("sources") or []:
         source_users[source_id] = sorted(
-            page["slug"] for page in remaining if source_id in (page.get("sources") or [])
+            page["slug"]
+            for page in remaining
+            if source_id in (page.get("sources") or [])
         )
     return {
         "id": target["id"],

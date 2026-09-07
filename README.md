@@ -202,15 +202,16 @@ mystuff learn stats
 
 Important behavior:
 
-- `mystuff learn` shows a compact status summary with open tracks and current lessons.
+- `mystuff learn` shows a compact status summary with one current learning focus.
 - `mystuff learn track` opens an interactive selector for published tracks when no track id is passed.
 - `mystuff learn track --list` prints published tracks as plain text.
-- `mystuff learn start` opens an interactive selector for published tracks you have not started yet.
-- `mystuff learn current` and `mystuff learn next` select from active lessons when no reference is passed.
+- `mystuff learn start` can select an unlocked private or draft track and prepares it just in time; switching focus requires confirmation.
+- `mystuff learn current` and `mystuff learn next` operate on the single active lesson when no reference is passed.
 - Learning selectors are built in: use `--prompt` to filter with text and choose by visible number instead of the full-screen selector.
-- `mystuff learn start <track_id>` resumes the first pending published lesson in that track.
-- `mystuff learn next` never jumps across tracks; when a track ends it suggests newly unlocked tracks.
-- Progress is stored in `learning/metadata.yaml` with `schema_version: 2`, `current_lesson_id`, `current_lesson_ids_by_track`, and `completed_lessons` keyed by `lesson_id`.
+- `mystuff learn start <track_id>` plans new tracks, then reviews only the first uncompleted lesson before setting the cursor.
+- `mystuff learn current` reviews a private active lesson only when it must be opened; a public lesson opens without an agent call.
+- `mystuff learn next` prepares the next lesson before recording completion; `mystuff learn complete` only records an explicit completion.
+- Progress is stored in `learning/metadata.yaml` with schema v2 and exactly one cursor; `completed_lessons` remains historical when focus changes.
 - `mystuff learn current --web` opens the published lesson URL from `config.yaml` under `generate.web.url`.
 
 ## Static Website Generation
