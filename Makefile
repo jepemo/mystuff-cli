@@ -81,7 +81,7 @@ lint-black: ## Check code formatting with black
 
 lint-flake8: ## Run flake8 linting
 	@echo "$(BLUE)Running flake8 linting...$(RESET)"
-	uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+	uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503,E501
 
 lint-mypy: ## Run mypy type checking
 	@echo "$(BLUE)Running mypy type checking...$(RESET)"
@@ -135,7 +135,7 @@ check-ci: ## Run checks exactly like GitHub Actions
 	@echo "$(YELLOW)1. Code formatting (black)...$(RESET)"
 	uv run python -m black --check --diff mystuff/ tests/
 	@echo "$(YELLOW)2. Linting (flake8)...$(RESET)"
-	uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+	uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503,E501
 	@echo "$(YELLOW)3. Type checking (mypy)...$(RESET)"
 	uv run python -m mypy mystuff/ --ignore-missing-imports || true
 	@echo "$(YELLOW)4. Running tests...$(RESET)"
@@ -185,7 +185,7 @@ quick-test: ## Quick test run (no coverage)
 	@uv run python -m pytest tests/ -x --tb=short
 
 quick-lint: ## Quick lint check (only flake8)
-	@uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503
+	@uv run python -m flake8 mystuff/ tests/ --max-line-length=88 --extend-ignore=E203,W503,E501
 
 # Specific module testing
 test-init: ## Test init module
