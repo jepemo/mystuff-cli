@@ -2,6 +2,7 @@
 """
 Test GitHub stars import functionality
 """
+
 import json
 import os
 import sys

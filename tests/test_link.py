@@ -2,6 +2,7 @@
 """
 Test for the link command functionality
 """
+
 import json
 import tempfile
 from pathlib import Path

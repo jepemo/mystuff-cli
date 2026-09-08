@@ -2,6 +2,7 @@
 """
 Simple test for the init command functionality (without pytest)
 """
+
 import tempfile
 from pathlib import Path
 

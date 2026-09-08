@@ -2,6 +2,7 @@
 """
 Test for the meeting command functionality
 """
+
 import tempfile
 from datetime import datetime
 from pathlib import Path

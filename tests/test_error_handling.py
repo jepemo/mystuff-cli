@@ -2,6 +2,7 @@
 """
 Test error handling for missing mystuff directory
 """
+
 import os
 import subprocess
 import sys

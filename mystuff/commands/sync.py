@@ -2,6 +2,7 @@
 """
 MyStuff CLI - Sync commands functionality
 """
+
 import subprocess
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Optional

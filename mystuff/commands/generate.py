@@ -2,6 +2,7 @@
 """
 MyStuff CLI - Generate static content functionality
 """
+
 import json
 import os
 import posixpath
@@ -1430,7 +1431,9 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     if wiki_template.exists() and wiki_page_template.exists():
         generate_wiki_pages(output_dir, config, generated_at, wiki)
     else:
-        console.print("[yellow]  ⚠️  Skipping wiki pages (templates not found)[/yellow]")
+        console.print(
+            "[yellow]  ⚠️  Skipping wiki pages (templates not found)[/yellow]"
+        )
 
     classification_template = get_templates_dir() / "classification.html"
     if classification_template.exists():
@@ -1452,7 +1455,9 @@ def generate_static_web(output_dir: Path, config: Dict[str, Any]) -> None:
     if track_template.exists():
         generate_track_pages(output_dir, config, generated_at, published_tracks)
     else:
-        console.print("[yellow]  ⚠️  Skipping track pages (template not found)[/yellow]")
+        console.print(
+            "[yellow]  ⚠️  Skipping track pages (template not found)[/yellow]"
+        )
 
     generate_lesson_pages(output_dir, config, generated_at, tracks=published_tracks)
 

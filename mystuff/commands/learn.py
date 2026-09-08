@@ -2,6 +2,7 @@
 """
 MyStuff CLI - Learning management functionality
 """
+
 import datetime
 import os
 import re

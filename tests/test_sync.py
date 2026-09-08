@@ -2,6 +2,7 @@
 """
 Tests for the sync command
 """
+
 import tempfile
 from pathlib import Path
 
