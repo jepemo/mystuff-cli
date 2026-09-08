@@ -34,6 +34,7 @@ GENERIC_TEXT_CONTENT_TYPES = {
     "application/octet-stream",
     "application/x-sh",
     "application/x-shellscript",
+    "text/x-sh",
 }
 
 

@@ -327,7 +327,9 @@ def test_x_resolvers_are_configurable_and_keep_original_first():
     ]
 
 
-def test_extensionless_text_can_be_reextracted_without_changing_original(tmp_path):
+def test_extensionless_text_can_be_reextracted_without_changing_original(
+    tmp_path, monkeypatch
+):
     paths = ensure_wiki_layout(get_wiki_paths(tmp_path / "mystuff"))
     source_file = tmp_path / "notes.livemd"
     source_file.write_text("# Live note\n\nReadable text.", encoding="utf-8")
@@ -340,6 +342,10 @@ def test_extensionless_text_can_be_reextracted_without_changing_original(tmp_pat
     assert "Readable text" in (paths.root / source["extracted_file"]).read_text()
     assert (paths.root / source["original_file"]).read_bytes() == original_before
 
+    monkeypatch.setattr(
+        "mystuff.wiki.capture.mimetypes.guess_type",
+        lambda _: ("text/x-sh", None),
+    )
     script_file = tmp_path / "start.sh"
     script_file.write_text("#!/bin/sh\necho ready\n", encoding="utf-8")
     script = capture_local_file(paths, script_file)
